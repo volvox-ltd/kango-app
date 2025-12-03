@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
+export const revalidate = 0;
 // これがトップページの画面です
 export default async function Home() {
   // 1. データベースから「jobs」テーブルの中身を取得（ついでに病院名も）
