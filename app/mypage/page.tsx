@@ -225,6 +225,29 @@ export default function MyPage() {
           </Link>
         </div>
       </main>
+        <div className="mt-8 bg-white rounded-lg shadow overflow-hidden">
+          <div className="p-4 border-b border-gray-100 font-bold text-gray-500 text-sm bg-gray-50">
+            サポート・その他
+          </div>
+          <div className="divide-y divide-gray-100">
+            <Link href="/info/help" className="flex justify-between items-center p-4 hover:bg-gray-50 transition text-gray-700">
+              よくある質問
+              <span className="text-gray-300">›</span>
+            </Link>
+            <Link href="/info/contact" className="flex justify-between items-center p-4 hover:bg-gray-50 transition text-gray-700">
+              お問い合わせ
+              <span className="text-gray-300">›</span>
+            </Link>
+            <Link href="/info/terms" className="flex justify-between items-center p-4 hover:bg-gray-50 transition text-gray-700">
+              利用規約
+              <span className="text-gray-300">›</span>
+            </Link>
+            <Link href="/info/privacy" className="flex justify-between items-center p-4 hover:bg-gray-50 transition text-gray-700">
+              プライバシーポリシー
+              <span className="text-gray-300">›</span>
+            </Link>
+          </div>
+        </div>
     </div>
   );
 }

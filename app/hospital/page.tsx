@@ -268,7 +268,12 @@ export default function HospitalDashboard() {
                         {app.status === 'confirmed' && (
                           <div className="flex flex-col gap-2 items-start">
                             <Link href={`/chat/${app.id}`} className="text-gray-500 text-xs">📄 ログを見る</Link>
-                            <button onClick={() => handleComplete(app)} className="bg-orange-500 text-white px-3 py-1 rounded text-xs">業務完了</button>
+                            <Link 
+                            href={`/hospital/complete/${app.id}`}
+                            className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 shadow font-bold text-xs inline-block"
+                            >
+                            業務完了・報告
+                            </Link>
                           </div>
                         )}
                         {app.status === 'completed' && <span className="text-green-600 font-bold">完了済 ✅</span>}

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import ApplyButton from '@/components/ApplyButton';
-import { MapPin, Clock, Calendar, AlertTriangle, FileText, CheckCircle, Navigation } from 'lucide-react';
+import { MapPin, Clock, Calendar, AlertTriangle, FileText, CheckCircle, Navigation, Building2, Globe } from 'lucide-react';
 
 // 常に最新データを表示
 export const revalidate = 0;
@@ -9,12 +9,18 @@ export const revalidate = 0;
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const { id } = await params;
 
-  // 1. まず表示しようとしている求人データを取得
+  // 1. 求人データ取得（病院の詳細情報も含める）
   const { data: job, error } = await supabase
     .from('jobs')
     .select(`
       *,
-      hospitals ( name, address, website_url, description )
+      hospitals ( 
+        name, 
+        address, 
+        website_url, 
+        description, 
+        images 
+      )
     `)
     .eq('id', id)
     .single();
@@ -23,20 +29,20 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     return <div className="p-8 text-center">お仕事が見つかりませんでした。</div>;
   }
 
-  // 2. 同じグループ（同じ募集内容）の他の日程を探す
+  // 2. 同じグループの他日程を探す
   let relatedJobs: any[] = [];
   if (job.group_id) {
     const { data } = await supabase
       .from('jobs')
       .select('id, start_time, end_time')
       .eq('group_id', job.group_id)
-      .eq('status', 'open') // 募集中のみ
+      .eq('status', 'open')
       .order('start_time', { ascending: true });
     
     if (data) relatedJobs = data;
   }
 
-  // 日付フォーマット用関数
+  // フォーマット関数
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
@@ -103,7 +109,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </div>
           </div>
 
-          {/* ★追加: 日程選択エリア */}
           {relatedJobs.length > 1 && (
             <div className="mb-2">
               <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
@@ -181,13 +186,56 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           )}
         </div>
 
-        {/* --- 場所・アクセス --- */}
+        {/* --- ★追加: 勤務先情報 (病院情報) --- */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
+          <h2 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
+            <Building2 size={18} className="text-purple-600" /> 勤務先情報
+          </h2>
+          
+          <div className="flex gap-4 mb-4">
+            {/* 病院画像があれば表示 */}
+            {/* @ts-ignore */}
+            {job.hospitals?.images && job.hospitals.images.length > 0 && (
+              <div className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                {/* @ts-ignore */}
+                <img src={job.hospitals.images[0]} alt="Hospital" className="w-full h-full object-cover" />
+              </div>
+            )}
+            
+            <div className="flex-1 min-w-0">
+              {/* @ts-ignore */}
+              <h3 className="font-bold text-gray-900 mb-1 text-lg">{job.hospitals?.name}</h3>
+              {/* @ts-ignore */}
+              <p className="text-sm text-gray-500 mb-2">{job.hospitals?.address}</p>
+              {/* @ts-ignore */}
+              {job.hospitals?.website_url && (
+                <a 
+                  // @ts-ignore
+                  href={job.hospitals.website_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50"
+                >
+                  <Globe size={12} /> 公式サイトを見る
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* @ts-ignore */}
+          {job.hospitals?.description && (
+            <div className="bg-purple-50 p-4 rounded-lg text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {/* @ts-ignore */}
+              {job.hospitals.description}
+            </div>
+          )}
+        </div>
+
+        {/* --- 場所・アクセス (既存) --- */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
           <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <Navigation size={18} className="text-red-500" /> 勤務地・アクセス
+            <Navigation size={18} className="text-red-500" /> アクセス
           </h2>
-          {/* @ts-ignore */}
-          <p className="text-sm font-bold text-gray-800 mb-1">{job.hospitals?.name}</p>
           {/* @ts-ignore */}
           <p className="text-sm text-gray-600 mb-2">{job.hospitals?.address}</p>
           
@@ -199,7 +247,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           
           {/* 簡易的なGoogleマップリンクボタン */}
           {/* @ts-ignore */}
-          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.hospitals?.address || '')}`} 
+          <a href={`http://maps.google.com/maps?q=${encodeURIComponent(job.hospitals?.address || '')}`} 
              target="_blank" rel="noopener noreferrer"
              className="mt-4 block w-full border border-gray-300 text-center py-2 rounded text-sm text-gray-600 hover:bg-gray-50"
           >
@@ -208,7 +256,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         </div>
       </div>
 
-      {/* --- 固定フッター（応募ボタン） --- */}
+      {/* --- 固定フッター --- */}
       <div className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 z-50">
         <div className="max-w-2xl mx-auto flex gap-4 items-center">
           <div className="flex-1">
@@ -216,7 +264,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
              <p className="text-xl font-bold text-blue-600">¥{job.hourly_wage.toLocaleString()}</p>
           </div>
           <div className="flex-[2]">
-             {/* 既存の応募ボタンコンポーネントを使用 */}
              <ApplyButton jobId={job.id} />
           </div>
         </div>
