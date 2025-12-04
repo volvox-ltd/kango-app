@@ -27,6 +27,7 @@ const handleLineLogin = async () => {
 
   const { data, error } = await supabase.auth.signInWithOAuth({
         // プロバイダー名は 'auth0' のまま維持
+        // @ts-ignore
         provider: 'auth0', 
         options: {
         redirectTo: `${window.location.origin}/auth/callback`,
