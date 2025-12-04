@@ -6,31 +6,32 @@ import { useRouter } from 'next/navigation';
 
 export default function NurseLoginPage() {
   const router = useRouter();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false); // タブ切り替え用
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // ★修正済み: グローバルな定数として定義。
-  // 必ずあなたのAuth0ドメインに書き換えてください！
-  const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
+  // ★重要: あなたのAuth0ドメイン (https:// をつけ、末尾のスラッシュは無し)
+  const AUTH0_DOMAIN = "https://kango.jp.auth0.com"; 
 
-  // ★修正: LINEログイン処理 (プロバイダーは auth0 で、TS無視)
+  // --- LINEログイン処理 (Keycloak設定を利用) ---
   const handleLineLogin = async () => {
     setLoading(true);
     
-    // 【最重要】Auth0への接続を試みる
+    // Supabaseの「Keycloak」プロバイダー設定を利用してAuth0に接続します
+    // @ts-ignore
     const { data, error } = await supabase.auth.signInWithOAuth({
-      // @ts-ignore
-      provider: 'auth0', // ★Auth0の接続名を使用
+      provider: 'keycloak', // ★ここを 'keycloak' に指定
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: 'openid profile email', // OIDCの標準スコープ
         queryParams: {
+          // Auth0に対して「LINE接続を使ってね」と指示するパラメータ
           connection: 'line', 
-          // Auth0のドメインをIssuerとして渡し、SupabaseがAuth0にリダイレクトさせる
-          iss: AUTH0_DOMAIN,
+          // Auth0のドメインをIssuerとして渡す（必須）
+          iss: AUTH0_DOMAIN, 
         },
       },
     });
@@ -41,8 +42,7 @@ export default function NurseLoginPage() {
     }
   };
 
-
-  // ログイン処理 (既存)
+  // --- 通常ログイン処理 ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -62,7 +62,7 @@ export default function NurseLoginPage() {
     }
   };
 
-  // 新規登録処理 (既存)
+  // --- 新規登録処理 ---
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -79,24 +79,15 @@ export default function NurseLoginPage() {
       return;
     }
 
+    // profilesテーブル作成
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert([
-        { 
-          id: authData.user.id, 
-          email: email, 
-          role: 'nurse' 
-        }
-      ]);
+      .insert([{ id: authData.user.id, email: email, role: 'nurse' }]);
 
+    // 看護師テーブル作成
     const { error: nurseError } = await supabase
       .from('nurses')
-      .insert([
-        { 
-          id: authData.user.id, 
-          name: name || '未設定のナース', 
-        }
-      ]);
+      .insert([{ id: authData.user.id, name: name || '未設定のナース' }]);
 
     if (profileError || nurseError) {
        console.error(profileError, nurseError);
