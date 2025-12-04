@@ -21,8 +21,8 @@ export default function NurseLoginPage() {
   const handleLineLogin = async () => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithOAuth({
-      // ★修正箇所: ここを 'auth0' に修正します
-      provider: 'auth0', 
+        // @ts-ignore
+        provider: 'auth0',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
