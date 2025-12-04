@@ -16,25 +16,30 @@ export default function NurseLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // ★追加: LINEログイン処理 (Auth0経由)
-  const handleLineLogin = async () => {
+    const handleLineLogin = async () => {
     setLoading(true);
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
-      // @ts-ignore
-      provider: 'auth0', // ★Auth0の仕組みを使う
-      options: {
+        provider: 'auth0',
+        options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          connection: 'line', // Auth0で設定したLINE接続名を指定
+            connection: 'line', 
         },
-      },
+        // ★追加: Auth0のSDKが要求するユーザーエージェント設定
+        // これにより、Next.jsがAuth0に正しくアクセスできるようになる
+        skipBrowserRedirect: false, 
+        userQueryParams: {
+            // Auth0に渡す追加パラメータがあればここに
+        }
+        },
     });
 
     if (error) {
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
+        alert('LINEログインエラー: ' + error.message);
+        setLoading(false);
     }
-  };
+    };
 
 
   // ログイン処理 (既存)
