@@ -16,27 +16,7 @@ export default function NurseLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // ★追加: LINEログイン処理 (Auth0経由)
-  const handleLineLogin = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'auth0', // ★Auth0の仕組みを使う
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          connection: 'line', // Auth0で設定したLINE接続名を指定
-        },
-      },
-    });
-
-    if (error) {
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
-    }
-  };
-
-
-  // ログイン処理 (既存)
+  // ログイン処理
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -56,7 +36,7 @@ export default function NurseLoginPage() {
     }
   };
 
-  // 新規登録処理 (既存)
+  // 新規登録処理
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -114,19 +94,6 @@ export default function NurseLoginPage() {
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
           💉 看護師ログイン
         </h2>
-        
-        {/* ★追加: LINEログインボタン（一番目立たせる） */}
-        <button
-          onClick={handleLineLogin}
-          className="w-full bg-[#06C755] text-white font-bold py-3 rounded-lg shadow hover:bg-[#05b34c] transition mb-6 flex items-center justify-center gap-2"
-        >
-          <span className="text-xl font-black">LINE</span> でログイン / 登録
-        </button>
-
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">またはメールアドレスで</span></div>
-        </div>
 
         {message && (
           <div className={`p-4 rounded mb-4 text-sm ${message.includes('成功') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
