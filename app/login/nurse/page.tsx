@@ -23,7 +23,7 @@ const handleLineLogin = async () => {
   setLoading(true);
   
   // ★重要: Auth0のドメインを正確に取得
-  const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
+  const AUTH0_DOMAIN = "kango.jp.auth0.com"; 
 
   const { data, error } = await supabase.auth.signInWithOAuth({
         // プロバイダー名は 'auth0' のまま維持
@@ -43,7 +43,6 @@ const handleLineLogin = async () => {
         setLoading(false);
     }
     };
-
 
   // ログイン処理 (既存)
   const handleLogin = async (e: React.FormEvent) => {
