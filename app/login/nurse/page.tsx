@@ -17,29 +17,11 @@ export default function NurseLoginPage() {
   const AUTH0_DOMAIN = "https://kango.jp.auth0.com"; 
 
   // --- LINEログイン処理 (Keycloak設定を利用) ---
-  const handleLineLogin = async () => {
+  // ★修正: シンプルにAPIへ飛ばすだけ
+  const handleLineLogin = () => {
     setLoading(true);
-    
-    // Supabaseの「Keycloak」プロバイダー設定を利用してAuth0に接続します
-    // @ts-ignore
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'keycloak', // ★ここを 'keycloak' に指定
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'openid profile email', // OIDCの標準スコープ
-        queryParams: {
-          // Auth0に対して「LINE接続を使ってね」と指示するパラメータ
-          connection: 'line', 
-          // Auth0のドメインをIssuerとして渡す（必須）
-          iss: AUTH0_DOMAIN, 
-        },
-      },
-    });
-
-    if (error) {
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
-    }
+    // 自分のAPIルートへ移動
+    window.location.href = '/api/auth/line';
   };
 
   // --- 通常ログイン処理 ---
