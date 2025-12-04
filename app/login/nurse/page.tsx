@@ -22,8 +22,9 @@ export default function NurseLoginPage() {
     const AUTH0_DOMAIN = "kango.jp.auth0.com"; 
 
     const { data, error } = await supabase.auth.signInWithOAuth({
-      // ★providerを'oidc'に戻します
-      provider: 'oidc', 
+    // ★providerを'oidc'に戻します
+    // @ts-ignore
+    provider: 'oidc',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
