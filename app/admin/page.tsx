@@ -13,7 +13,7 @@ export default function AdminDashboard() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [billings, setBillings] = useState<any[]>([]);
 
-  // データ取得
+  // データ取得 //
   const fetchData = async () => {
     setLoading(true);
     
