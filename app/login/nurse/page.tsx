@@ -71,29 +71,31 @@ export default function NurseLoginPage() {
     setLoading(false);
   };
 
-  // --- LINEログイン処理 ---
-  const handleLineLogin = async () => {
-    setLoading(true);
-    
-    // Auth0のドメインを正確に取得 (この行は書き換える必要があります)
-    // ※Auth0の型エラーを無視するため、@ts-ignoreをこの行に追加
-    // @ts-ignore
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'auth0', 
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          connection: 'line', 
-          iss: AUTH0_DOMAIN, 
+    // ★シンプル版: 余計なオプションを削ぎ落とす
+    const handleLineLogin = async () => {
+        setLoading(true);
+        
+        // @ts-ignore
+        const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'auth0',
+        options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+            // Auth0側で「既定の接続」としてLINEを設定していれば、これだけで繋がります
+            // もしAuth0のログイン画面（ID/Pass入力）が出てしまう場合は、
+            // 下の queryParams のコメントアウトを外してください。
+            /*
+            queryParams: {
+            connection: 'line',
+            },
+            */
         },
-      },
-    });
+        });
 
-    if (error) {
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
-    }
-  };
+        if (error) {
+        alert('LINEログインエラー: ' + error.message);
+        setLoading(false);
+        }
+    };
 
 
   return (
