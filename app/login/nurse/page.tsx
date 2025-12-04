@@ -13,10 +13,36 @@ export default function NurseLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // 1. Auth0のドメイン定義（必ず修正してください）
+  // ★修正済み: グローバルな定数として定義。
+  // 必ずあなたのAuth0ドメインに書き換えてください！
   const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
 
-  // --- ログイン処理 ---
+  // ★修正: LINEログイン処理 (プロバイダーは auth0 で、TS無視)
+  const handleLineLogin = async () => {
+    setLoading(true);
+    
+    // 【最重要】Auth0への接続を試みる
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      // @ts-ignore
+      provider: 'auth0', // ★Auth0の接続名を使用
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          connection: 'line', 
+          // Auth0のドメインをIssuerとして渡し、SupabaseがAuth0にリダイレクトさせる
+          iss: AUTH0_DOMAIN,
+        },
+      },
+    });
+
+    if (error) {
+      alert('LINEログインエラー: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+
+  // ログイン処理 (既存)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -36,7 +62,7 @@ export default function NurseLoginPage() {
     }
   };
 
-  // --- 新規登録処理 ---
+  // 新規登録処理 (既存)
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -53,10 +79,24 @@ export default function NurseLoginPage() {
       return;
     }
 
-    // profilesテーブル作成
-    const { error: profileError } = await supabase.from('profiles').insert([{ id: authData.user.id, email: email, role: 'nurse' }]);
-    // 看護師テーブル作成
-    const { error: nurseError } = await supabase.from('nurses').insert([{ id: authData.user.id, name: name || '未設定のナース' }]);
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([
+        { 
+          id: authData.user.id, 
+          email: email, 
+          role: 'nurse' 
+        }
+      ]);
+
+    const { error: nurseError } = await supabase
+      .from('nurses')
+      .insert([
+        { 
+          id: authData.user.id, 
+          name: name || '未設定のナース', 
+        }
+      ]);
 
     if (profileError || nurseError) {
        console.error(profileError, nurseError);
@@ -70,41 +110,6 @@ export default function NurseLoginPage() {
     }
     setLoading(false);
   };
-
-    // ★シンプル版: 余計なオプションを削ぎ落とす
-    const handleLineLogin = async () => {
-        setLoading(true);
-        
-        // @ts-ignore
-        const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'auth0',
-        options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-            // Auth0側で「既定の接続」としてLINEを設定していれば、これだけで繋がります
-            // もしAuth0のログイン画面（ID/Pass入力）が出てしまう場合は、
-            // 下の queryParams のコメントアウトを外してください。
-            /*
-            queryParams: {
-            connection: 'line',
-            },
-            */
-        },
-        });
-
-        if (error) {
-        alert('LINEログインエラー: ' + error.message);
-        setLoading(false);
-        }
-    };
-
-    if (error) {
-      // 万が一Googleとしても認識されなかった場合の予備（デバッグ用）
-      console.error("Auth0 Bypass Error:", error);
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
-    }
-  };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-blue-50 px-4">
