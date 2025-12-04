@@ -71,25 +71,31 @@ export default function NurseLoginPage() {
     setLoading(false);
   };
 
-// ★最終解決策: Googleプロバイダーを隠れ蓑にしてAuth0へ飛ばす
-  const handleLineLogin = async () => {
-    setLoading(true);
-    
-    // Auth0ドメイン (kango.jp.auth0.com)
-    const AUTH0_DOMAIN = "https://kango.jp.auth0.com"; 
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      // ★あえて 'google' を指定してSupabaseのチェックを通過させる
-      provider: 'google', 
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'openid profile email', // OIDCスコープを明示
-        queryParams: {
-          connection: 'line', 
-          iss: AUTH0_DOMAIN, 
+    // ★シンプル版: 余計なオプションを削ぎ落とす
+    const handleLineLogin = async () => {
+        setLoading(true);
+        
+        // @ts-ignore
+        const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'auth0',
+        options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+            // Auth0側で「既定の接続」としてLINEを設定していれば、これだけで繋がります
+            // もしAuth0のログイン画面（ID/Pass入力）が出てしまう場合は、
+            // 下の queryParams のコメントアウトを外してください。
+            /*
+            queryParams: {
+            connection: 'line',
+            },
+            */
         },
-      },
-    });
+        });
+
+        if (error) {
+        alert('LINEログインエラー: ' + error.message);
+        setLoading(false);
+        }
+    };
 
     if (error) {
       // 万が一Googleとしても認識されなかった場合の予備（デバッグ用）
