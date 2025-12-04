@@ -1,36 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { use } from 'react'; // Next.js 15+
 
-export default function ReviewPage({ params }: { params: { id: string } }) {
+export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  // Next.js 15以降の非同期params対応
+  const { id } = use(params);
+
   const [isGood, setIsGood] = useState(true);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     setLoading(true);
-    const resolvedParams = await params;
     
     // 1. applicationデータから必要なIDを取得
     const { data: app } = await supabase
       .from('applications')
       .select('user_id, job_id, jobs(hospital_id)')
-      .eq('id', resolvedParams.id)
+      .eq('id', id)
       .single();
 
     if (!app) {
-      alert('エラー'); return;
+      alert('エラー: データが見つかりませんでした');
+      setLoading(false);
+      return;
+    }
+
+    // ★修正: jobsが配列で返ってくる場合に備えて、安全に取り出す
+    // @ts-ignore
+    const hospitalId = Array.isArray(app.jobs) ? app.jobs[0]?.hospital_id : app.jobs?.hospital_id;
+
+    if (!hospitalId) {
+      alert('エラー: 病院情報が取得できませんでした');
+      setLoading(false);
+      return;
     }
 
     // 2. レビューを保存
     const { error } = await supabase
       .from('hospital_reviews')
       .insert([{
-        hospital_id: app.jobs.hospital_id,
+        hospital_id: hospitalId,
         nurse_id: app.user_id,
         job_id: app.job_id,
         is_good: isGood,
