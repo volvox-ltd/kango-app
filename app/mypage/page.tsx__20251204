@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle, User, CreditCard, Bell } from 'lucide-react';
+import { CheckCircle, User } from 'lucide-react';
 
 export default function MyPage() {
   const router = useRouter();
@@ -58,65 +58,11 @@ export default function MyPage() {
     fetchData();
   }, [router]);
 
-  // ログアウト処理
+  // ★追加: ログアウト処理
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/login'); // ログイン画面（ポータル）に戻る
     router.refresh();
-  };
-
-  // 振込申請処理
-  const handleWithdraw = async () => {
-    if (!nurseProfile) return;
-
-    // 1. 口座未登録チェック
-    if (!nurseProfile.bank_name || !nurseProfile.account_number) {
-      if (confirm('振込先口座が登録されていません。\n登録画面に移動しますか？')) {
-        router.push('/mypage/bank');
-      }
-      return;
-    }
-
-    // 2. 残高チェック (★ここを変更しました！)
-    const balance = nurseProfile.wallet_balance || 0;
-    if (balance < 5000) {
-      alert(`振込申請は ¥5,000 から可能です。\n現在の残高: ¥${balance.toLocaleString()}`);
-      return;
-    }
-
-    // 3. 申請実行
-    if (!confirm(`現在の残高 ¥${balance.toLocaleString()} の振込申請を行いますか？`)) return;
-
-    try {
-      // トランザクション的に処理（申請履歴作成 -> 残高0）
-      const { error: withdrawError } = await supabase
-        .from('withdrawals')
-        .insert([{
-          nurse_id: user.id,
-          amount: balance,
-          bank_info: { // 念のため、申請時点の口座情報を記録
-            bank: nurseProfile.bank_name,
-            branch: nurseProfile.branch_name,
-            number: nurseProfile.account_number
-          }
-        }]);
-
-      if (withdrawError) throw withdrawError;
-
-      const { error: balanceError } = await supabase
-        .from('nurses')
-        .update({ wallet_balance: 0 })
-        .eq('id', user.id);
-
-      if (balanceError) throw balanceError;
-
-      alert('振込申請が完了しました！\n翌月末にお振込予定です。');
-      window.location.reload(); // 画面更新して残高0を表示
-
-    } catch (e: any) {
-      console.error(e);
-      alert('申請に失敗しました: ' + e.message);
-    }
   };
 
   const statusMap: { [key: string]: string } = {
@@ -140,15 +86,11 @@ export default function MyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 pb-24">
+    <div className="min-h-screen bg-gray-50 p-6">
       <main className="max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">マイページ</h1>
-        <Link href="/notifications" className="text-gray-600">
-            <Bell size={24} />
-        </Link>
-        </div>
+          <h1 className="text-2xl font-bold text-gray-800">マイページ</h1>
+          {/* ★追加: ログアウトボタン */}
           <button 
             onClick={handleLogout}
             className="text-sm text-gray-500 hover:text-red-600 underline font-bold"
@@ -157,83 +99,69 @@ export default function MyPage() {
           </button>
         </div>
 
-        {/* プロフィールカード */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex justify-between items-start mb-4">
+        <div className="flex justify-between items-start mb-4">
             <div className="flex gap-4 items-center">
-              {/* アバター画像 */}
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border border-gray-100 flex-shrink-0">
+            {/* アバター画像表示 */}
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border border-gray-100 flex-shrink-0">
                 {nurseProfile?.avatar_url ? (
-                  <img src={nurseProfile.avatar_url} alt="icon" className="w-full h-full object-cover" />
+                <img src={nurseProfile.avatar_url} alt="icon" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    {/* Userアイコンのインポートが必要です: import { User, CheckCircle } from 'lucide-react'; */}
                     <User size={32} />
-                  </div>
+                </div>
                 )}
-              </div>
+            </div>
 
-              <div>
+            <div>
                 <p className="text-gray-600 text-xs mb-1">こんにちは</p>
                 <p className="text-lg font-bold text-gray-800 leading-tight">
-                  {nurseProfile?.name || 'ゲスト'} さん
+                {nurseProfile?.name || 'ゲスト'} さん
                 </p>
                 
-                {/* 免許証登録済バッジ */}
+                {/* ★ 免許証登録済バッジ ★ */}
                 {nurseProfile?.license_image_url ? (
-                  <div className="mt-1 inline-flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
+                <div className="mt-1 inline-flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
                     <CheckCircle size={12} />
                     免許証登録済
-                  </div>
+                </div>
                 ) : (
-                  <p className="text-xs text-red-500 mt-1">未承認</p>
+                <p className="text-xs text-red-500 mt-1">未承認</p>
                 )}
-              </div>
+            </div>
             </div>
 
             <Link 
-              href="/mypage/profile"
-              className="text-xs bg-gray-100 border border-gray-300 px-3 py-1.5 rounded text-gray-600 hover:bg-gray-200 font-bold"
+            href="/mypage/profile"
+            className="text-xs bg-gray-100 border border-gray-300 px-3 py-1.5 rounded text-gray-600 hover:bg-gray-200 font-bold"
             >
-              編集
+            編集
             </Link>
-          </div>
-          
-          {!nurseProfile?.license_image_url && (
+        </div>
+        
+        {/* 免許証未登録アラート（登録済みなら表示しない） */}
+        {!nurseProfile?.license_image_url && (
             <div className="bg-red-50 border border-red-200 rounded p-3 flex gap-3 items-center animate-pulse">
-              <div className="text-red-500 text-2xl">⚠️</div>
-              <div className="flex-1">
+            <div className="text-red-500 text-2xl">⚠️</div>
+            <div className="flex-1">
                 <p className="text-sm font-bold text-red-700">免許証が未登録です</p>
                 <p className="text-xs text-red-600">お仕事に応募するには、プロフィール編集から免許証画像を登録してください。</p>
-              </div>
             </div>
-          )}
+            </div>
+        )}
         </div>
 
         {/* ウォレット表示エリア */}
-        <div className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg shadow-lg p-6 mb-6 text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <p className="text-sm opacity-90 mb-1">現在のウォレット残高</p>
-            <p className="text-4xl font-bold mb-4">
-              ¥{(nurseProfile?.wallet_balance || 0).toLocaleString()}
-            </p>
-            
-            <div className="flex justify-end gap-3">
-              {/* 口座設定ボタン */}
-              <Link 
-                href="/mypage/bank" 
-                className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-2 rounded-full transition flex items-center gap-1"
-              >
-                <CreditCard size={14} /> 口座設定
-              </Link>
-              
-              {/* 振込申請ボタン */}
-              <button 
-                onClick={handleWithdraw}
-                className="bg-white text-blue-600 text-xs font-bold px-4 py-2 rounded-full hover:bg-gray-100 transition shadow-sm"
-              >
-                振込申請をする
-              </button>
-            </div>
+        <div className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg shadow-lg p-6 mb-6 text-white">
+          <p className="text-sm opacity-90 mb-1">現在のウォレット残高</p>
+          <p className="text-4xl font-bold">
+            ¥{(nurseProfile?.wallet_balance || 0).toLocaleString()}
+          </p>
+          <div className="mt-4 text-right">
+            <button className="bg-white text-blue-600 text-xs font-bold px-4 py-2 rounded-full hover:bg-gray-100 transition">
+              振込申請をする
+            </button>
           </div>
         </div>
 
@@ -268,6 +196,7 @@ export default function MyPage() {
                   <span>📅 {new Date(app.jobs?.start_time).toLocaleDateString()}</span>
                 </div>
 
+                {/* ステータスに応じたアクションボタン */}
                 {app.status === 'negotiating' && (
                   <Link 
                     href={`/chat/${app.id}`}
@@ -290,7 +219,12 @@ export default function MyPage() {
           </div>
         )}
         
-        {/* --- 設定・その他メニュー --- */}
+        <div className="mt-8 text-center">
+          <Link href="/" className="text-blue-600 hover:underline">
+            ← お仕事一覧に戻る
+          </Link>
+        </div>
+      </main>
         <div className="mt-8 bg-white rounded-lg shadow overflow-hidden">
           <div className="p-4 border-b border-gray-100 font-bold text-gray-500 text-sm bg-gray-50">
             サポート・その他
@@ -314,13 +248,6 @@ export default function MyPage() {
             </Link>
           </div>
         </div>
-
-        <div className="mt-8 text-center pb-8">
-          <Link href="/" className="text-blue-600 hover:underline">
-            ← お仕事一覧に戻る
-          </Link>
-        </div>
-      </main>
     </div>
   );
 }

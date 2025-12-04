@@ -41,11 +41,11 @@ export default function HospitalDashboard() {
 
     if (jobsError) console.error(jobsError);
 
-    // ★ここでグルーピング処理を行います
+    // グルーピング処理
     if (jobsData) {
       const groups: { [key: string]: any } = {};
       jobsData.forEach((job) => {
-        const key = job.group_id || job.id; // グループIDがない場合は自分自身をキーに
+        const key = job.group_id || job.id;
         if (!groups[key]) {
           groups[key] = {
             ...job,
@@ -90,9 +90,7 @@ export default function HospitalDashboard() {
   const handleDeleteJobGroup = async (job: any) => {
     if (!confirm(`「${job.title}」の募集日程（全${job.count}件）をすべて削除しますか？\n※既に応募がある場合、それらも消えます。`)) return;
 
-    // group_idがあればそれで、なければidで削除
     let query = supabase.from('jobs').delete();
-    
     if (job.group_id) {
       query = query.eq('group_id', job.group_id);
     } else {
@@ -105,38 +103,41 @@ export default function HospitalDashboard() {
       alert('削除に失敗しました: ' + error.message);
     } else {
       alert('求人を削除しました。');
-      fetchData(); // 画面更新
+      fetchData();
     }
   };
 
+  // 通知送信ヘルパー関数
+  const sendNotification = async (userId: string, title: string, message: string, link: string) => {
+    await supabase.from('notifications').insert([{
+      user_id: userId,
+      title: title,
+      message: message,
+      link_url: link
+    }]);
+  };
+
   // --- 応募処理ロジック ---
-  const handleApprove = async (appId: string) => {
+  const handleApprove = async (appId: string, userId: string, jobTitle: string) => {
     if (!confirm('承認してチャットを開始しますか？')) return;
     const { error } = await supabase.from('applications').update({ status: 'negotiating' }).eq('id', appId);
-    if (!error) { alert('承認しました！'); fetchData(); }
+    
+    if (!error) { 
+      await sendNotification(userId, '応募が承認されました', `「${jobTitle}」の応募が承認されました。チャットを開始してください。`, `/chat/${appId}`);
+      alert('承認しました！'); 
+      fetchData(); 
+    }
   };
 
-  const handleConfirm = async (appId: string) => {
+  const handleConfirm = async (appId: string, userId: string, jobTitle: string) => {
     if (!confirm('採用確定しますか？')) return;
     const { error } = await supabase.from('applications').update({ status: 'confirmed' }).eq('id', appId);
-    if (!error) { alert('採用確定しました！'); fetchData(); }
-  };
-
-  const handleComplete = async (app: any) => {
-    if (!confirm('業務完了としますか？')) return;
-    const start = new Date(app.jobs.start_time).getTime();
-    const end = new Date(app.jobs.end_time).getTime();
-    const durationHours = (end - start) / (1000 * 60 * 60);
-    const totalAmount = Math.floor(app.jobs.hourly_wage * durationHours);
     
-    try {
-      const { error: appError } = await supabase.from('applications').update({ status: 'completed', final_amount: totalAmount }).eq('id', app.id);
-      if (appError) throw appError;
-      const { error: nurseError } = await supabase.from('nurses').update({ wallet_balance: (app.nurses.wallet_balance || 0) + totalAmount }).eq('id', app.nurses.id);
-      if (nurseError) throw nurseError;
-      alert(`業務完了！入金しました。`);
-      fetchData();
-    } catch (e: any) { console.error(e); alert('エラー: ' + e.message); }
+    if (!error) { 
+      await sendNotification(userId, '採用が確定しました', `「${jobTitle}」の採用が確定しました。当日はよろしくお願いいたします。`, `/jobs/${appId}`); // リンク先は詳細など
+      alert('採用確定しました！'); 
+      fetchData(); 
+    }
   };
 
   if (loading) return <div className="p-8">読み込み中...</div>;
@@ -178,7 +179,6 @@ export default function HospitalDashboard() {
                   {groupedMyJobs.map((group) => (
                     <tr key={group.id}>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {/* 日付をまとめて表示 */}
                         <div className="font-bold text-gray-700 mb-1">
                           全{group.count}日程
                         </div>
@@ -246,11 +246,11 @@ export default function HospitalDashboard() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div>
-                            <Link href={`/nurses/${app.nurses.id}`} className="text-sm text-blue-600 font-bold hover:underline">
-                            {app.nurses?.name || '名無し'}
+                            <Link href={`/nurses/${app.user_id}`} className="text-sm text-blue-600 font-bold hover:underline">
+                              {app.nurses?.name || '名無し'}
                             </Link>
                         </div>
-                        <div className="text-xs text-gray-500">¥{(app.nurses?.wallet_balance || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500">残高: ¥{(app.nurses?.wallet_balance || 0).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 text-xs font-bold rounded-full ${
@@ -262,21 +262,33 @@ export default function HospitalDashboard() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium">
-                        {app.status === 'applied' && <button onClick={() => handleApprove(app.id)} className="bg-blue-600 text-white px-3 py-1 rounded">承認する</button>}
+                        {app.status === 'applied' && (
+                          <button 
+                            onClick={() => handleApprove(app.id, app.user_id, app.jobs.title)}
+                            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                          >
+                            承認する
+                          </button>
+                        )}
                         {app.status === 'negotiating' && (
                           <div className="flex flex-col gap-2 items-start">
                             <Link href={`/chat/${app.id}`} className="text-blue-600 hover:underline text-xs font-bold flex items-center">💬 チャットを開く</Link>
-                            <button onClick={() => handleConfirm(app.id)} className="bg-green-600 text-white px-3 py-1 rounded text-xs">採用確定</button>
+                            <button 
+                              onClick={() => handleConfirm(app.id, app.user_id, app.jobs.title)}
+                              className="bg-green-600 text-white px-3 py-1 rounded text-xs"
+                            >
+                              採用確定
+                            </button>
                           </div>
                         )}
                         {app.status === 'confirmed' && (
                           <div className="flex flex-col gap-2 items-start">
                             <Link href={`/chat/${app.id}`} className="text-gray-500 text-xs">📄 ログを見る</Link>
                             <Link 
-                            href={`/hospital/complete/${app.id}`}
-                            className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 shadow font-bold text-xs inline-block"
+                              href={`/hospital/complete/${app.id}`}
+                              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 shadow font-bold text-xs inline-block"
                             >
-                            業務完了・報告
+                              業務完了・報告
                             </Link>
                           </div>
                         )}

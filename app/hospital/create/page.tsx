@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Upload, X, MapPin, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Upload, X, MapPin, FileText, AlertTriangle, CheckCircle, Trash2, Calendar, Clock } from 'lucide-react';
 
 export default function CreateJobPage() {
   const router = useRouter();
@@ -11,33 +11,67 @@ export default function CreateJobPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
+  // 15分刻みの時間リストを生成 (00:00 ~ 23:45)
+  const timeOptions = [];
+  for (let i = 0; i < 24; i++) {
+    for (let j = 0; j < 60; j += 15) {
+      const hour = i.toString().padStart(2, '0');
+      const min = j.toString().padStart(2, '0');
+      timeOptions.push(`${hour}:${min}`);
+    }
+  }
+
   // フォームデータ
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    dates: [''],     // 日付リスト（最大10日）
-    startTime: '',
-    endTime: '',
+    // ★変更: 日付と時間をセットで管理
+    shifts: [
+      { date: '', startTime: '09:00', endTime: '12:00' }
+    ],
     hourlyWage: 2000,
-    benefits: [] as string[], // 待遇
-    precautions: '', // 注意事項
-    requirements: '', // 条件
-    documentUrl: '', // 書類URL
-    accessInfo: '',  // アクセス
+    benefits: [] as string[],
+    precautions: '',
+    requirements: '',
+    documentUrl: '',
+    accessInfo: '',
   });
 
-  // 待遇リスト
   const benefitsList = [
     '交通費支給', '自転車通勤OK', 'バイク通勤OK', '自動車通勤OK', '髪型自由', '服装自由'
   ];
 
-  // 入力ハンドラ
   const handleChange = (e: any) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  // 画像選択ハンドラ
+  // ★シフト追加
+  const addShift = () => {
+    if (formData.shifts.length >= 10) return;
+    // 直前のシフトの内容をコピーして追加すると入力が楽
+    const lastShift = formData.shifts[formData.shifts.length - 1];
+    setFormData({ 
+      ...formData, 
+      shifts: [...formData.shifts, { ...lastShift, date: '' }] // 日付だけ空にする
+    });
+  };
+
+  // ★シフト削除
+  const removeShift = (index: number) => {
+    if (formData.shifts.length <= 1) return;
+    const newShifts = [...formData.shifts];
+    newShifts.splice(index, 1);
+    setFormData({ ...formData, shifts: newShifts });
+  };
+
+  // ★シフト変更（日付・時間）
+  const handleShiftChange = (index: number, field: 'date' | 'startTime' | 'endTime', value: string) => {
+    const newShifts = [...formData.shifts];
+    newShifts[index][field] = value;
+    setFormData({ ...formData, shifts: newShifts });
+  };
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -46,8 +80,6 @@ export default function CreateJobPage() {
         return;
       }
       setImageFiles([...imageFiles, file]);
-      
-      // プレビュー作成
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreviews([...imagePreviews, reader.result as string]);
@@ -56,31 +88,15 @@ export default function CreateJobPage() {
     }
   };
 
-  // 画像削除
   const removeImage = (index: number) => {
     const newFiles = [...imageFiles];
     newFiles.splice(index, 1);
     setImageFiles(newFiles);
-
     const newPreviews = [...imagePreviews];
     newPreviews.splice(index, 1);
     setImagePreviews(newPreviews);
   };
 
-  // 日付追加
-  const addDate = () => {
-    if (formData.dates.length >= 10) return;
-    setFormData({ ...formData, dates: [...formData.dates, ''] });
-  };
-
-  // 日付変更
-  const handleDateChange = (index: number, value: string) => {
-    const newDates = [...formData.dates];
-    newDates[index] = value;
-    setFormData({ ...formData, dates: newDates });
-  };
-
-  // 待遇トグル
   const toggleBenefit = (benefit: string) => {
     if (formData.benefits.includes(benefit)) {
       setFormData({ ...formData, benefits: formData.benefits.filter(b => b !== benefit) });
@@ -89,11 +105,11 @@ export default function CreateJobPage() {
     }
   };
 
-  // 送信処理
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.dates.some(d => !d)) {
-      alert('日付が入力されていない項目があります');
+    // バリデーション
+    if (formData.shifts.some(s => !s.date || !s.startTime || !s.endTime)) {
+      alert('日時が正しく入力されていない項目があります');
       return;
     }
     setLoading(true);
@@ -102,37 +118,29 @@ export default function CreateJobPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('ログインしてください');
 
-      // ★ここが変更点！
-      // 今回の登録用の「グループID」を1つ発行します（ただのランダムなID）
       const groupId = crypto.randomUUID(); 
 
-      // 1. 画像アップロード (ここはそのまま)
+      // 画像アップロード
       const uploadedImageUrls: string[] = [];
       for (const file of imageFiles) {
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const { data, error } = await supabase.storage
-          .from('job_photos')
-          .upload(`${user.id}/${fileName}`, file);
+        const { error } = await supabase.storage.from('job_photos').upload(`${user.id}/${fileName}`, file);
         if (error) throw error;
-        const { data: publicUrlData } = supabase.storage
-          .from('job_photos')
-          .getPublicUrl(`${user.id}/${fileName}`);
-        uploadedImageUrls.push(publicUrlData.publicUrl);
+        const { data } = supabase.storage.from('job_photos').getPublicUrl(`${user.id}/${fileName}`);
+        uploadedImageUrls.push(data.publicUrl);
       }
 
-      // 2. 日付ごとにループして登録
-      for (const date of formData.dates) {
-        if (!date) continue;
-
-        const startDateTime = new Date(`${date}T${formData.startTime}`);
-        const endDateTime = new Date(`${date}T${formData.endTime}`);
+      // ★シフトごとに登録ループ
+      for (const shift of formData.shifts) {
+        const startDateTime = new Date(`${shift.date}T${shift.startTime}`);
+        const endDateTime = new Date(`${shift.date}T${shift.endTime}`);
 
         const { error } = await supabase
           .from('jobs')
           .insert([
             {
               hospital_id: user.id,
-              group_id: groupId, // ★ここで共通のIDを保存！
+              group_id: groupId,
               title: formData.title,
               description: formData.description,
               start_time: startDateTime.toISOString(),
@@ -175,7 +183,7 @@ export default function CreateJobPage() {
 
         <div className="p-6 space-y-8">
           
-          {/* 画像アップロード */}
+          {/* 画像 */}
           <section>
             <label className="block text-sm font-bold text-gray-700 mb-2">職場の写真 (最大3枚)</label>
             <div className="flex gap-4 overflow-x-auto pb-2">
@@ -209,28 +217,64 @@ export default function CreateJobPage() {
             </div>
           </section>
 
-          {/* 日時設定（複数日） */}
+          {/* ★日時設定（セット版） */}
           <section>
-            <label className="block text-sm font-bold text-gray-700 mb-2">募集日時 (最大10日まで)</label>
-            <div className="space-y-3 mb-3">
-              <div className="flex gap-2 items-center">
-                <input type="time" name="startTime" className="border p-2 rounded bg-gray-50" onChange={handleChange} />
-                <span>〜</span>
-                <input type="time" name="endTime" className="border p-2 rounded bg-gray-50" onChange={handleChange} />
-              </div>
-              {formData.dates.map((date, idx) => (
-                <input
-                  key={idx}
-                  type="date"
-                  value={date}
-                  onChange={(e) => handleDateChange(idx, e.target.value)}
-                  className="block w-full border p-2 rounded bg-gray-50 mb-2"
-                />
+            <label className="block text-sm font-bold text-gray-700 mb-3">募集日時 (最大10枠)</label>
+            
+            <div className="space-y-3">
+              {formData.shifts.map((shift, idx) => (
+                <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
+                  {/* 削除ボタン（2つ目以降） */}
+                  {formData.shifts.length > 1 && (
+                    <button 
+                      onClick={() => removeShift(idx)}
+                      className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+
+                  <div className="flex flex-col gap-3">
+                    {/* 日付 */}
+                    <div className="flex items-center gap-2">
+                      <Calendar size={18} className="text-blue-500" />
+                      <input
+                        type="date"
+                        className="bg-white border p-2 rounded flex-1"
+                        value={shift.date}
+                        onChange={(e) => handleShiftChange(idx, 'date', e.target.value)}
+                      />
+                    </div>
+
+                    {/* 時間 */}
+                    <div className="flex items-center gap-2">
+                      <Clock size={18} className="text-orange-500" />
+                      <div className="flex items-center gap-2 flex-1">
+                        <select
+                          className="bg-white border p-2 rounded flex-1"
+                          value={shift.startTime}
+                          onChange={(e) => handleShiftChange(idx, 'startTime', e.target.value)}
+                        >
+                          {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <span className="text-gray-400">〜</span>
+                        <select
+                          className="bg-white border p-2 rounded flex-1"
+                          value={shift.endTime}
+                          onChange={(e) => handleShiftChange(idx, 'endTime', e.target.value)}
+                        >
+                          {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-            {formData.dates.length < 10 && (
-              <button onClick={addDate} type="button" className="text-blue-600 text-sm font-bold flex items-center gap-1">
-                + 日程を追加する
+
+            {formData.shifts.length < 10 && (
+              <button onClick={addShift} type="button" className="mt-3 w-full py-2 border-2 border-dashed border-blue-200 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition">
+                + 日程・時間を追加する
               </button>
             )}
           </section>

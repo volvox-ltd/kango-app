@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-react';
+import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X, Bell } from 'lucide-react';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -110,8 +110,12 @@ export default function Home() {
       {/* ヘッダーエリア */}
       <header className="bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
-          <h1 className="text-xl font-bold text-gray-800 mb-2">KanGO!</h1>
-          
+        <div className="flex justify-between items-center mb-2">
+          <h1 className="text-xl font-bold text-gray-800">KanGO!</h1>
+          <Link href="/notifications" className="p-2 text-gray-600 relative">
+            <Bell size={24} />
+          </Link>
+        </div>       
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
