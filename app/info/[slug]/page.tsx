@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { use } from 'react'; // Next.js 15+ のためのフック
+import React from 'react';
 
 export default function InfoPage({ params }: { params: Promise<{ slug: string }> }) {
   // Next.js 15以降は params が Promise なので use() でアンラップします
   const { slug } = use(params);
 
   // コンテンツの定義
-  const contents: { [key: string]: { title: string; body: JSX.Element } } = {
+  const contents: { [key: string]: { title: string; body: React.ReactNode } } = {
     terms: {
       title: '利用規約',
       body: (
