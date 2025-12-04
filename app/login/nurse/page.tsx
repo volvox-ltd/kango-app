@@ -13,27 +13,24 @@ export default function NurseLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // ★修正: Auth0のドメインを定義 (ユーザーのドメインに書き換えてください)
-  // 例: const AUTH0_DOMAIN = "https://dev-xxxxx.us.auth0.com"; 
+  // ★修正済み: グローバルな定数として定義。
+  // 必ずあなたのAuth0ドメインに書き換えてください！
   const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
 
-// app/login/nurse/page.tsx 内の handleLineLogin 関数
-
+  // ★修正: LINEログイン処理 (プロバイダーは auth0 で、TS無視)
   const handleLineLogin = async () => {
     setLoading(true);
     
-    // Auth0のドメインを正確に取得 (この行は書き換える必要があります)
-    const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
-
+    // 【最重要】Auth0への接続を試みる
     const { data, error } = await supabase.auth.signInWithOAuth({
-      // ★最終修正: providerを 'oidc' に戻し、@ts-ignore で型エラーを回避
       // @ts-ignore
-      provider: 'oidc', 
+      provider: 'auth0', // ★Auth0の接続名を使用
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          connection: 'line', // Auth0内のLINE接続名を指定
-          iss: AUTH0_DOMAIN, // Auth0のドメインをIssuerとして渡す
+          connection: 'line', 
+          // Auth0のドメインをIssuerとして渡し、SupabaseがAuth0にリダイレクトさせる
+          iss: AUTH0_DOMAIN,
         },
       },
     });
@@ -43,6 +40,7 @@ export default function NurseLoginPage() {
       setLoading(false);
     }
   };
+
 
   // ログイン処理 (既存)
   const handleLogin = async (e: React.FormEvent) => {
