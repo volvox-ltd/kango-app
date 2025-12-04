@@ -45,7 +45,13 @@ export default function AdminDashboard() {
     // 3. 請求計算 (今月の完了案件を集計)
     const { data: apps } = await supabase
       .from('applications')
-      .select(`*, jobs(hospital_id), hospitals(name)`)
+      .select(`
+        *,
+        jobs (
+          hospital_id,
+          hospitals ( name )
+        )
+      `)
       .eq('status', 'completed');
 
     if (apps) {
@@ -53,16 +59,21 @@ export default function AdminDashboard() {
       const billingMap: {[key: string]: {name: string, total: number, count: number}} = {};
       apps.forEach(app => {
         // @ts-ignore
-        const hId = app.jobs.hospital_id;
+        const job = app.jobs; // jobsを取り出す
         // @ts-ignore
-        const hName = app.hospitals?.name;
-        const amount = app.final_amount || 0;
+        const hId = job?.hospital_id;
+        // @ts-ignore
+        const hName = job?.hospitals?.name;
+        
+        if (hId && hName) {
+          const amount = app.final_amount || 0;
 
-        if (!billingMap[hId]) {
-          billingMap[hId] = { name: hName, total: 0, count: 0 };
+          if (!billingMap[hId]) {
+            billingMap[hId] = { name: hName, total: 0, count: 0 };
+          }
+          billingMap[hId].total += amount;
+          billingMap[hId].count += 1;
         }
-        billingMap[hId].total += amount;
-        billingMap[hId].count += 1;
       });
       setBillings(Object.values(billingMap));
     }
