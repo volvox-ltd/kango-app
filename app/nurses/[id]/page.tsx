@@ -1,48 +1,92 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User, MapPin, Briefcase, CheckCircle, ThumbsUp, ArrowLeft, FileText, Lock } from 'lucide-react';
+import { useRouter, useParams } from 'next/navigation'; // useParamsを使います
 import Link from 'next/link';
 
-export default async function NurseProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default function NurseProfilePage() {
+  const params = useParams();
+  const id = params?.id as string; // URLからIDを取得
+  const router = useRouter();
 
-  // 1. ログイン中の病院情報を取得
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <div className="p-8">ログインが必要です</div>;
+  const [loading, setLoading] = useState(true);
+  const [nurse, setNurse] = useState<any>(null);
+  const [thanksCount, setThanksCount] = useState(0);
+  const [isMatched, setIsMatched] = useState(false);
+  const [hospitalUser, setHospitalUser] = useState<any>(null);
 
-  // 2. 看護師データ取得
-  const { data: nurse } = await supabase
-    .from('nurses')
-    .select('*')
-    .eq('id', id)
-    .single();
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
 
-  if (!nurse) return <div className="p-8">ユーザーが見つかりません</div>;
+      // 1. ログイン中の病院情報を取得
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        // ログインしていない場合
+        setLoading(false);
+        return; 
+      }
+      setHospitalUser(user);
 
-  // 3. 「ありがとう」の数を集計
-  const { count: thanksCount } = await supabase
-    .from('nurse_reviews')
-    .select('*', { count: 'exact', head: true })
-    .eq('nurse_id', id);
+      // 2. 看護師データ取得
+      const { data: nurseData } = await supabase
+        .from('nurses')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-  // 4. ★閲覧権限チェック (マッチング済みか？)
-  // この病院(user.id)と、この看護師(id)の間で、確定(confirmed)か完了(completed)の案件があるか探す
-  const { data: matchedApps } = await supabase
-    .from('applications')
-    .select('id, jobs!inner(hospital_id)')
-    .eq('user_id', id)
-    .eq('jobs.hospital_id', user.id)
-    .in('status', ['confirmed', 'completed']);
+      if (nurseData) setNurse(nurseData);
 
-  // 配列が1つ以上あれば「マッチング済み」とみなす
-  const isMatched = matchedApps && matchedApps.length > 0;
+      // 3. 「ありがとう」の数を集計
+      const { count } = await supabase
+        .from('nurse_reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('nurse_id', id);
+      
+      if (count !== null) setThanksCount(count);
+
+      // 4. 閲覧権限チェック (マッチング済みか？)
+      // この病院(user.id)と、この看護師(id)の間で、確定(confirmed)か完了(completed)の案件があるか探す
+      const { data: matchedApps } = await supabase
+        .from('applications')
+        .select('id, jobs!inner(hospital_id)')
+        .eq('user_id', id)
+        .eq('jobs.hospital_id', user.id)
+        .in('status', ['confirmed', 'completed']);
+
+      // 配列が1つ以上あれば「マッチング済み」とみなす
+      if (matchedApps && matchedApps.length > 0) {
+        setIsMatched(true);
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [id]);
+
+  if (loading) return <div className="p-8 text-center">読み込み中...</div>;
+
+  if (!hospitalUser) {
+    return (
+      <div className="p-8 text-center">
+        <p className="mb-4">ログインが必要です</p>
+        <Link href="/login" className="text-blue-600 underline">ログイン画面へ</Link>
+      </div>
+    );
+  }
+
+  if (!nurse) return <div className="p-8 text-center">ユーザーが見つかりません</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 pb-24">
       {/* ヘッダー */}
       <div className="flex items-center gap-2 mb-6">
-        <Link href="/hospital" className="bg-white p-2 rounded-full shadow text-gray-500">
+        <button onClick={() => router.back()} className="bg-white p-2 rounded-full shadow text-gray-500 hover:bg-gray-50">
           <ArrowLeft size={20} />
-        </Link>
+        </button>
         <h1 className="font-bold text-lg text-gray-700">応募者プロフィール</h1>
       </div>
 
@@ -70,7 +114,7 @@ export default async function NurseProfilePage({ params }: { params: Promise<{ i
               </span>
             )}
             <span className="inline-flex items-center gap-1 bg-pink-50 text-pink-600 text-xs px-2 py-1 rounded border border-pink-200">
-              <ThumbsUp size={12} /> ありがとう {thanksCount || 0}回
+              <ThumbsUp size={12} /> ありがとう {thanksCount}回
             </span>
           </div>
         </div>
@@ -103,7 +147,7 @@ export default async function NurseProfilePage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {/* ★ 免許証確認エリア (プライバシー保護付き) ★ */}
+        {/* 免許証確認エリア (プライバシー保護付き) */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
             <FileText size={18} className="text-blue-600" /> 免許証・資格
