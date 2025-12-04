@@ -77,19 +77,16 @@ export default function NurseLoginPage() {
         
         // @ts-ignore
         const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'auth0',
-        options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-            // Auth0側で「既定の接続」としてLINEを設定していれば、これだけで繋がります
-            // もしAuth0のログイン画面（ID/Pass入力）が出てしまう場合は、
-            // 下の queryParams のコメントアウトを外してください。
-            /*
-            queryParams: {
-            connection: 'line',
+            // ★修正: 'as any' をつけて型チェックを強制的にパスさせます
+            provider: 'auth0' as any, 
+            options: {
+                redirectTo: `${window.location.origin}/auth/callback`,
+                queryParams: {
+                connection: 'line', 
+                iss: AUTH0_DOMAIN, 
+                },
             },
-            */
-        },
-        });
+            });
 
         if (error) {
         alert('LINEログインエラー: ' + error.message);
