@@ -17,27 +17,32 @@ export default function NurseLoginPage() {
   // 例: const AUTH0_DOMAIN = "https://dev-xxxxx.us.auth0.com"; 
   const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
 
-  // ★修正: LINEログイン処理 (provider: 'auth0' に戻す)
-  const handleLineLogin = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithOAuth({
-        // @ts-ignore
-        provider: 'auth0',
-      options: {
+// app/login/nurse/page.tsx 内の handleLineLogin 関数
+
+const handleLineLogin = async () => {
+  setLoading(true);
+  
+  // ★重要: Auth0のドメインを正確に取得
+  const AUTH0_DOMAIN = "https://[あなたのAuth0ドメイン].auth0.com"; 
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+        // プロバイダー名は 'auth0' のまま維持
+        provider: 'auth0', 
+        options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          connection: 'line', 
-          // Auth0のドメインが正しいことを確認させるためのissパラメータを追加
-          iss: AUTH0_DOMAIN,
+            connection: 'line', // Auth0内のLINE接続名を指定
+            // ★修正: issパラメータをAuth0ドメインに設定
+            iss: AUTH0_DOMAIN,
         },
-      },
+        },
     });
 
     if (error) {
-      alert('LINEログインエラー: ' + error.message);
-      setLoading(false);
+        alert('LINEログインエラー: ' + error.message);
+        setLoading(false);
     }
-  };
+    };
 
 
   // ログイン処理 (既存)
