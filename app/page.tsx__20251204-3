@@ -3,18 +3,19 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-react';
+import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X, Bell } from 'lucide-react';
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [groupedJobs, setGroupedJobs] = useState<any[]>([]);
 
-  // フィルター用
+  // フィルター用ステート
   const [filterDate, setFilterDate] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
+  // 都道府県リスト（簡易版）
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -28,36 +29,43 @@ export default function Home() {
   const fetchJobs = async () => {
     setLoading(true);
     
+    // 1. クエリの構築
+    // ★重要: 病院テーブルで絞り込みたい場合は !inner を使います
     let query = supabase
       .from('jobs')
       .select(`
         *,
-        hospitals!inner ( name, address ),
-        applications ( status )
+        hospitals!inner ( name, address )
       `)
       .eq('status', 'open')
       .order('start_time', { ascending: true });
 
-    if (filterDate) { query = query.gte('start_time', `${filterDate}T00:00:00`); }
-    if (filterKeyword) { query = query.ilike('title', `%${filterKeyword}%`); }
-    if (filterPrefecture) { query = query.like('hospitals.address', `${filterPrefecture}%`); }
+    // 日付フィルター
+    if (filterDate) {
+      query = query.gte('start_time', `${filterDate}T00:00:00`);
+    }
+
+    // キーワードフィルター
+    if (filterKeyword) {
+      query = query.ilike('title', `%${filterKeyword}%`);
+    }
+
+    // ★追加: 都道府県フィルター
+    // 病院の住所が「東京都...」で始まるものを探す
+    if (filterPrefecture) {
+      query = query.like('hospitals.address', `${filterPrefecture}%`);
+    }
 
     const { data: jobs, error } = await query;
 
     if (error) console.error(error);
     
+    // 2. グルーピング処理
     if (jobs) {
       const groups: { [key: string]: any } = {};
 
       jobs.forEach((job) => {
         const key = job.group_id || job.id;
-
-        // 採用済み数をカウント
-        const confirmedCount = job.applications?.filter((a: any) => 
-          ['confirmed', 'completed'].includes(a.status)
-        ).length || 0;
-
-        const isFull = confirmedCount >= (job.capacity || 1);
 
         if (!groups[key]) {
           groups[key] = {
@@ -70,8 +78,7 @@ export default function Home() {
         groups[key].dates.push({
           id: job.id,
           start: job.start_time,
-          end: job.end_time,
-          isFull: isFull
+          end: job.end_time
         });
         groups[key].total_shifts++;
       });
@@ -87,8 +94,9 @@ export default function Home() {
   useEffect(() => {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterDate, filterPrefecture]);
+  }, [filterDate, filterPrefecture]); // 日付か都道府県が変わったら即検索
 
+  // 条件クリア
   const clearFilters = () => {
     setFilterDate('');
     setFilterKeyword('');
@@ -102,10 +110,12 @@ export default function Home() {
       {/* ヘッダーエリア */}
       <header className="bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
-          <div className="flex justify-between items-center mb-2">
-            <h1 className="text-xl font-bold text-gray-800">KanGO!</h1>
-          </div>
-          
+        <div className="flex justify-between items-center mb-2">
+          <h1 className="text-xl font-bold text-gray-800">KanGO!</h1>
+          <Link href="/notifications" className="p-2 text-gray-600 relative">
+            <Bell size={24} />
+          </Link>
+        </div>       
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
@@ -125,15 +135,19 @@ export default function Home() {
               }`}
             >
               <SlidersHorizontal size={20} />
+              {/* 絞り込み中ならドットを表示 */}
               {(filterDate || filterPrefecture) && (
                 <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
               )}
             </button>
           </div>
 
+          {/* フィルターパネル */}
           {showFilter && (
             <div className="mt-3 pt-3 border-t animate-in slide-in-from-top-2 duration-200">
               <div className="space-y-4">
+                
+                {/* 地域選択 */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">エリア（都道府県）</label>
                   <select 
@@ -147,6 +161,8 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
+
+                {/* 日付選択 */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">いつから働けますか？</label>
                   <input 
@@ -156,6 +172,7 @@ export default function Home() {
                     onChange={(e) => setFilterDate(e.target.value)}
                   />
                 </div>
+
                 <div className="flex justify-between items-center pt-2">
                   <button onClick={clearFilters} className="text-xs text-gray-500 underline flex items-center gap-1">
                     <X size={12} /> 条件をクリア
@@ -194,40 +211,20 @@ export default function Home() {
               ? group.images[0] 
               : 'https://placehold.jp/300x200.png?text=No%20Image';
 
-            // ★ 全日程が満員かチェック
-            const isAllFull = group.dates.every((d: any) => d.isFull);
-
             return (
               <Link href={`/jobs/${group.id}`} key={group.id} className="block group">
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 group-active:scale-[0.98] transition-transform duration-100 relative">
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 group-active:scale-[0.98] transition-transform duration-100">
                   
-                  {/* 画像エリア */}
-                  <div className="relative h-32 w-full bg-gray-200 overflow-hidden">
+                  <div className="relative h-32 w-full bg-gray-200">
+                    <img src={coverImage} alt={group.title} className="w-full h-full object-cover" />
                     
-                    {/* ★追加: 募集終了ラベル (左上リボン) */}
-                    {isAllFull && (
-                      <div className="absolute top-0 left-0 w-24 h-24 overflow-hidden z-20 pointer-events-none">
-                        <div className="bg-gray-500 text-white text-xs font-bold absolute top-[12px] left-[-28px] w-[100px] text-center -rotate-45 py-1 shadow-md">
-                          募集終了
-                        </div>
-                      </div>
-                    )}
-
-                    <img 
-                      src={coverImage} 
-                      alt={group.title} 
-                      className={`w-full h-full object-cover transition duration-300 ${isAllFull ? 'grayscale opacity-70' : ''}`} // ★満員ならグレーアウト
-                    />
-                    
-                    {!isAllFull && (
-                      <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
-                        ¥{group.hourly_wage.toLocaleString()}
-                      </div>
-                    )}
+                    <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
+                      ¥{group.hourly_wage.toLocaleString()}
+                    </div>
                   </div>
 
                   <div className="p-4">
-                    <h2 className={`font-bold text-lg leading-tight mb-2 line-clamp-2 ${isAllFull ? 'text-gray-500' : 'text-gray-800'}`}>
+                    <h2 className="font-bold text-gray-800 text-lg leading-tight mb-2 line-clamp-2">
                       {group.title}
                     </h2>
                     
@@ -244,15 +241,8 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {group.dates.slice(0, 3).map((d: any) => (
-                          <span 
-                            key={d.id} 
-                            className={`text-xs px-2 py-1 rounded border ${
-                              d.isFull 
-                                ? 'bg-gray-100 text-gray-400 border-gray-200 line-through' 
-                                : 'bg-blue-50 text-blue-700 border-blue-100'
-                            }`}
-                          >
-                            {new Date(d.start).getDate()}日{d.isFull ? '(満)' : ''}
+                          <span key={d.id} className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded border border-gray-200">
+                            {new Date(d.start).getDate()}日
                           </span>
                         ))}
                         {group.dates.length > 3 && (

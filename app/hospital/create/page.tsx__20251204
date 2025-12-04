@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Upload, X, MapPin, FileText, AlertTriangle, CheckCircle, Trash2, Calendar, Clock, Users } from 'lucide-react';
+import { Upload, X, MapPin, FileText, AlertTriangle, CheckCircle, Trash2, Calendar, Clock } from 'lucide-react';
 
 export default function CreateJobPage() {
   const router = useRouter();
@@ -11,7 +11,7 @@ export default function CreateJobPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
-  // 15分刻み時間リスト
+  // 15分刻みの時間リストを生成 (00:00 ~ 23:45)
   const timeOptions: string[] = [];
   for (let i = 0; i < 24; i++) {
     for (let j = 0; j < 60; j += 15) {
@@ -25,11 +25,11 @@ export default function CreateJobPage() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    // ★変更: 日付と時間をセットで管理
     shifts: [
       { date: '', startTime: '09:00', endTime: '12:00' }
     ],
     hourlyWage: 2000,
-    capacity: 1, // ★追加: 募集人数
     benefits: [] as string[],
     precautions: '',
     requirements: '',
@@ -46,15 +46,18 @@ export default function CreateJobPage() {
     setFormData({ ...formData, [name]: value });
   };
 
+  // ★シフト追加
   const addShift = () => {
     if (formData.shifts.length >= 10) return;
+    // 直前のシフトの内容をコピーして追加すると入力が楽
     const lastShift = formData.shifts[formData.shifts.length - 1];
     setFormData({ 
       ...formData, 
-      shifts: [...formData.shifts, { ...lastShift, date: '' }]
+      shifts: [...formData.shifts, { ...lastShift, date: '' }] // 日付だけ空にする
     });
   };
 
+  // ★シフト削除
   const removeShift = (index: number) => {
     if (formData.shifts.length <= 1) return;
     const newShifts = [...formData.shifts];
@@ -62,6 +65,7 @@ export default function CreateJobPage() {
     setFormData({ ...formData, shifts: newShifts });
   };
 
+  // ★シフト変更（日付・時間）
   const handleShiftChange = (index: number, field: 'date' | 'startTime' | 'endTime', value: string) => {
     const newShifts = [...formData.shifts];
     newShifts[index][field] = value;
@@ -103,6 +107,7 @@ export default function CreateJobPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // バリデーション
     if (formData.shifts.some(s => !s.date || !s.startTime || !s.endTime)) {
       alert('日時が正しく入力されていない項目があります');
       return;
@@ -125,7 +130,7 @@ export default function CreateJobPage() {
         uploadedImageUrls.push(data.publicUrl);
       }
 
-      // シフト登録
+      // ★シフトごとに登録ループ
       for (const shift of formData.shifts) {
         const startDateTime = new Date(`${shift.date}T${shift.startTime}`);
         const endDateTime = new Date(`${shift.date}T${shift.endTime}`);
@@ -141,7 +146,6 @@ export default function CreateJobPage() {
               start_time: startDateTime.toISOString(),
               end_time: endDateTime.toISOString(),
               hourly_wage: parseInt(formData.hourlyWage as any),
-              capacity: parseInt(formData.capacity as any), // ★追加
               images: uploadedImageUrls,
               benefits: formData.benefits,
               precautions: formData.precautions,
@@ -201,7 +205,7 @@ export default function CreateJobPage() {
             </div>
           </section>
 
-          {/* タイトル */}
+          {/* タイトル・内容 */}
           <section className="space-y-4">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">求人タイトル</label>
@@ -213,30 +217,52 @@ export default function CreateJobPage() {
             </div>
           </section>
 
-          {/* 日時 */}
+          {/* ★日時設定（セット版） */}
           <section>
             <label className="block text-sm font-bold text-gray-700 mb-3">募集日時 (最大10枠)</label>
+            
             <div className="space-y-3">
               {formData.shifts.map((shift, idx) => (
                 <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200 relative">
+                  {/* 削除ボタン（2つ目以降） */}
                   {formData.shifts.length > 1 && (
-                    <button onClick={() => removeShift(idx)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500">
+                    <button 
+                      onClick={() => removeShift(idx)}
+                      className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                    >
                       <Trash2 size={16} />
                     </button>
                   )}
+
                   <div className="flex flex-col gap-3">
+                    {/* 日付 */}
                     <div className="flex items-center gap-2">
                       <Calendar size={18} className="text-blue-500" />
-                      <input type="date" className="bg-white border p-2 rounded flex-1" value={shift.date} onChange={(e) => handleShiftChange(idx, 'date', e.target.value)} />
+                      <input
+                        type="date"
+                        className="bg-white border p-2 rounded flex-1"
+                        value={shift.date}
+                        onChange={(e) => handleShiftChange(idx, 'date', e.target.value)}
+                      />
                     </div>
+
+                    {/* 時間 */}
                     <div className="flex items-center gap-2">
                       <Clock size={18} className="text-orange-500" />
                       <div className="flex items-center gap-2 flex-1">
-                        <select className="bg-white border p-2 rounded flex-1" value={shift.startTime} onChange={(e) => handleShiftChange(idx, 'startTime', e.target.value)}>
+                        <select
+                          className="bg-white border p-2 rounded flex-1"
+                          value={shift.startTime}
+                          onChange={(e) => handleShiftChange(idx, 'startTime', e.target.value)}
+                        >
                           {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                         <span className="text-gray-400">〜</span>
-                        <select className="bg-white border p-2 rounded flex-1" value={shift.endTime} onChange={(e) => handleShiftChange(idx, 'endTime', e.target.value)}>
+                        <select
+                          className="bg-white border p-2 rounded flex-1"
+                          value={shift.endTime}
+                          onChange={(e) => handleShiftChange(idx, 'endTime', e.target.value)}
+                        >
                           {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
@@ -245,6 +271,7 @@ export default function CreateJobPage() {
                 </div>
               ))}
             </div>
+
             {formData.shifts.length < 10 && (
               <button onClick={addShift} type="button" className="mt-3 w-full py-2 border-2 border-dashed border-blue-200 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition">
                 + 日程・時間を追加する
@@ -252,24 +279,12 @@ export default function CreateJobPage() {
             )}
           </section>
 
-          {/* 時給・人数 */}
-          <section className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">時給</label>
-              <div className="relative">
-                <input name="hourlyWage" type="number" defaultValue={2000} className="w-full border p-3 rounded-lg bg-gray-50 pl-8" onChange={handleChange} />
-                <span className="absolute left-3 top-3 text-gray-500">¥</span>
-              </div>
-            </div>
-            {/* ★追加: 募集人数入力 */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1">
-                <Users size={16} /> 募集人数
-              </label>
-              <div className="relative">
-                <input name="capacity" type="number" min={1} defaultValue={1} className="w-full border p-3 rounded-lg bg-gray-50 pr-8" onChange={handleChange} />
-                <span className="absolute right-3 top-3 text-gray-500">名</span>
-              </div>
+          {/* 時給 */}
+          <section>
+            <label className="block text-sm font-bold text-gray-700 mb-1">時給</label>
+            <div className="relative">
+              <input name="hourlyWage" type="number" defaultValue={2000} className="w-full border p-3 rounded-lg bg-gray-50 pl-8" onChange={handleChange} />
+              <span className="absolute left-3 top-3 text-gray-500">¥</span>
             </div>
           </section>
 
@@ -302,18 +317,21 @@ export default function CreateJobPage() {
               </label>
               <textarea name="requirements" rows={2} className="w-full border p-3 rounded-lg bg-gray-50" placeholder="例: 看護師免許必須、臨床経験3年以上" onChange={handleChange} />
             </div>
+            
             <div>
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-1">
                 <AlertTriangle size={16} className="text-orange-500" /> 注意事項
               </label>
               <textarea name="precautions" rows={2} className="w-full border p-3 rounded-lg bg-gray-50" placeholder="例: 貴重品ロッカーあり、昼食持参" onChange={handleChange} />
             </div>
+
             <div>
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-1">
                 <MapPin size={16} className="text-red-500" /> アクセス・場所
               </label>
               <textarea name="accessInfo" rows={2} className="w-full border p-3 rounded-lg bg-gray-50" placeholder="例: 渋谷駅ハチ公口より徒歩5分。1階がコンビニのビルです。" onChange={handleChange} />
             </div>
+
             <div>
               <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-1">
                 <FileText size={16} className="text-blue-500" /> 業務に関する書類 (URL)
