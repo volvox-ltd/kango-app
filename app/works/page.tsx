@@ -44,7 +44,7 @@ export default function WorksPage() {
     };
 
     fetchWorks();
-  }, [activeTab]); // タブが切り替わったら再取得
+  }, [activeTab]);
 
   // 日時フォーマット関数
   const formatDateTime = (start: string, end: string) => {
@@ -145,19 +145,34 @@ export default function WorksPage() {
                       </div>
                     </div>
 
+                    {/* 完了タブの表示項目（レビューボタン追加） */}
                     {activeTab === 'past' && (
-                      <div className="flex items-start gap-3 pt-2 border-t mt-2">
-                        <CheckCircle size={18} className="text-green-500 mt-0.5" />
-                        <div className="w-full">
-                          <p className="text-xs text-gray-400">獲得報酬</p>
-                          <div className="flex justify-between items-end">
-                            <p className="text-xl font-bold text-green-700">
-                              ¥{(app.final_amount || 0).toLocaleString()}
-                            </p>
-                            <Link href={`/chat/${app.id}`} className="text-xs text-gray-400 underline">
-                              履歴を見る
-                            </Link>
+                      <div className="pt-2 border-t mt-2 space-y-3">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle size={18} className="text-green-500 mt-0.5" />
+                          <div className="w-full">
+                            <p className="text-xs text-gray-400">獲得報酬</p>
+                            <div className="flex justify-between items-end">
+                              <p className="text-xl font-bold text-green-700">
+                                ¥{(app.final_amount || 0).toLocaleString()}
+                              </p>
+                            </div>
                           </div>
+                        </div>
+
+                        {/* ★追加: レビューボタン */}
+                        <div className="flex gap-2">
+                          <Link 
+                            href={`/jobs/review/${app.id}`} 
+                            className="flex-1 bg-pink-50 text-pink-600 py-2 rounded-lg text-sm font-bold text-center border border-pink-200 hover:bg-pink-100 transition"
+                          >
+                            <span className="flex items-center justify-center gap-1">
+                               病院をレビューする
+                            </span>
+                          </Link>
+                          <Link href={`/chat/${app.id}`} className="flex-1 bg-gray-50 text-gray-600 py-2 rounded-lg text-sm font-bold text-center border border-gray-200">
+                            履歴
+                          </Link>
                         </div>
                       </div>
                     )}

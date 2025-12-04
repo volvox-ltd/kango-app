@@ -245,7 +245,11 @@ export default function HospitalDashboard() {
                         <div className="text-xs text-gray-400">{new Date(app.created_at).toLocaleDateString()}</div>
                       </td>
                       <td className="px-6 py-4 text-sm">
-                        <div>{app.nurses?.name || '名無し'}</div>
+                        <div>
+                            <Link href={`/nurses/${app.nurses.id}`} className="text-sm text-blue-600 font-bold hover:underline">
+                            {app.nurses?.name || '名無し'}
+                            </Link>
+                        </div>
                         <div className="text-xs text-gray-500">¥{(app.nurses?.wallet_balance || 0).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4">

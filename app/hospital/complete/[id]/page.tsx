@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Clock, Calculator, ArrowLeft, CheckCircle } from 'lucide-react';
+// ★追加: ThumbsUp アイコン
+import { Clock, Calculator, ArrowLeft, CheckCircle, ThumbsUp } from 'lucide-react';
 
 export default function CompleteJobPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -16,6 +17,9 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
   const [actualStart, setActualStart] = useState('');
   const [actualEnd, setActualEnd] = useState('');
   const [totalAmount, setTotalAmount] = useState(0);
+  
+  // ★追加: ありがとう送信フラグ
+  const [sendThanks, setSendThanks] = useState(true);
 
   // データ取得
   useEffect(() => {
@@ -27,7 +31,7 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
         .from('applications')
         .select(`
           *,
-          jobs ( title, hourly_wage, start_time, end_time ),
+          jobs ( title, hourly_wage, start_time, end_time, hospital_id ),
           nurses ( id, name, wallet_balance )
         `)
         .eq('id', resolvedParams.id)
@@ -42,10 +46,8 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
       setApplication(data);
 
       // 初期値は「予定時間」を入れる
-      // ISO文字列 (YYYY-MM-DDTHH:mm...) から、input type="datetime-local" 用の形式 (YYYY-MM-DDTHH:mm) に変換
       const toLocalInput = (isoStr: string) => {
         const date = new Date(isoStr);
-        // 日本時間との時差(9時間)を考慮して簡易変換
         date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
         return date.toISOString().slice(0, 16);
       };
@@ -63,11 +65,9 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
       const start = new Date(actualStart).getTime();
       const end = new Date(actualEnd).getTime();
       
-      // 差分（ミリ秒）を時間（h）に変換
       const diffHours = (end - start) / (1000 * 60 * 60);
       
       if (diffHours > 0) {
-        // 時給 × 時間（1円未満切り捨て）
         const amount = Math.floor(application.jobs.hourly_wage * diffHours);
         setTotalAmount(amount);
       } else {
@@ -83,7 +83,7 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
     setSubmitting(true);
 
     try {
-      // 1. アプリケーション情報の更新（完了ステータス、実績時間、最終金額）
+      // 1. アプリケーション情報の更新
       const { error: appError } = await supabase
         .from('applications')
         .update({
@@ -106,6 +106,17 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
         .eq('id', application.nurses.id);
 
       if (nurseError) throw nurseError;
+
+      // 3. ★追加: 「ありがとう」を送る処理
+      if (sendThanks) {
+        // 重複エラーを避けるため、一応 insert してみる（エラーハンドリングは緩めに）
+        await supabase
+          .from('nurse_reviews')
+          .insert([{
+            nurse_id: application.nurses.id,
+            hospital_id: application.jobs.hospital_id
+          }]);
+      }
 
       alert('業務完了手続きが完了しました！');
       router.push('/hospital');
@@ -176,6 +187,23 @@ export default function CompleteJobPage({ params }: { params: { id: string } }) 
               <span className="text-2xl font-bold text-orange-600">¥{totalAmount.toLocaleString()}</span>
             </div>
           </div>
+        </div>
+
+        {/* ★追加: ありがとうチェックボックス */}
+        <div className="bg-pink-50 p-4 rounded-xl border border-pink-100 flex items-center gap-3 cursor-pointer" onClick={() => setSendThanks(!sendThanks)}>
+          <div className={`p-2 rounded-full transition-colors ${sendThanks ? 'bg-pink-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+            <ThumbsUp size={20} />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-gray-800">「ありがとう」を送る</p>
+            <p className="text-xs text-gray-500">感謝の気持ちを伝えて実績バッジを付与します</p>
+          </div>
+          <input 
+            type="checkbox" 
+            className="w-6 h-6 text-pink-600 rounded focus:ring-pink-500"
+            checked={sendThanks}
+            onChange={(e) => setSendThanks(e.target.checked)}
+          />
         </div>
 
         <button

@@ -94,7 +94,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           <div className="flex items-center gap-2 text-gray-600 text-sm mb-4">
             <MapPin size={16} />
             {/* @ts-ignore */}
-            <span>{job.hospitals?.name}</span>
+            <span>
+                <Link href={`/hospitals/${job.hospital_id}`} className="hover:underline">
+                <h3 className="font-bold text-gray-900 mb-1 text-lg">{job.hospitals?.name}</h3>
+                </Link>
+            </span>
           </div>
 
           <div className="flex gap-4 border-t border-b py-4 mb-4">
@@ -204,7 +208,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             
             <div className="flex-1 min-w-0">
               {/* @ts-ignore */}
-              <h3 className="font-bold text-gray-900 mb-1 text-lg">{job.hospitals?.name}</h3>
+              <h3 className="font-bold text-gray-900 mb-1 text-lg">
+                <Link href={`/hospitals/${job.hospital_id}`} className="hover:underline">
+                <h3 className="font-bold text-gray-900 mb-1 text-lg">{job.hospitals?.name}</h3>
+                </Link>
+              </h3>
               {/* @ts-ignore */}
               <p className="text-sm text-gray-500 mb-2">{job.hospitals?.address}</p>
               {/* @ts-ignore */}
