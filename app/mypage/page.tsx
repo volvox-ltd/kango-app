@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { CheckCircle, User } from 'lucide-react';
 
 export default function MyPage() {
   const router = useRouter();
@@ -99,7 +100,56 @@ export default function MyPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <p className="text-gray-600">こんにちは、<br/>{user?.email} さん</p>
+        <div className="flex justify-between items-start mb-4">
+            <div className="flex gap-4 items-center">
+            {/* アバター画像表示 */}
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 border border-gray-100 flex-shrink-0">
+                {nurseProfile?.avatar_url ? (
+                <img src={nurseProfile.avatar_url} alt="icon" className="w-full h-full object-cover" />
+                ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    {/* Userアイコンのインポートが必要です: import { User, CheckCircle } from 'lucide-react'; */}
+                    <User size={32} />
+                </div>
+                )}
+            </div>
+
+            <div>
+                <p className="text-gray-600 text-xs mb-1">こんにちは</p>
+                <p className="text-lg font-bold text-gray-800 leading-tight">
+                {nurseProfile?.name || 'ゲスト'} さん
+                </p>
+                
+                {/* ★ 免許証登録済バッジ ★ */}
+                {nurseProfile?.license_image_url ? (
+                <div className="mt-1 inline-flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
+                    <CheckCircle size={12} />
+                    免許証登録済
+                </div>
+                ) : (
+                <p className="text-xs text-red-500 mt-1">未承認</p>
+                )}
+            </div>
+            </div>
+
+            <Link 
+            href="/mypage/profile"
+            className="text-xs bg-gray-100 border border-gray-300 px-3 py-1.5 rounded text-gray-600 hover:bg-gray-200 font-bold"
+            >
+            編集
+            </Link>
+        </div>
+        
+        {/* 免許証未登録アラート（登録済みなら表示しない） */}
+        {!nurseProfile?.license_image_url && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 flex gap-3 items-center animate-pulse">
+            <div className="text-red-500 text-2xl">⚠️</div>
+            <div className="flex-1">
+                <p className="text-sm font-bold text-red-700">免許証が未登録です</p>
+                <p className="text-xs text-red-600">お仕事に応募するには、プロフィール編集から免許証画像を登録してください。</p>
+            </div>
+            </div>
+        )}
         </div>
 
         {/* ウォレット表示エリア */}

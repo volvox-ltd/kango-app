@@ -10,10 +10,11 @@ export default function HospitalDashboard() {
   const [loading, setLoading] = useState(true);
   const [hospitalUser, setHospitalUser] = useState<any>(null);
   
-  const [myJobs, setMyJobs] = useState<any[]>([]);
-  const [applications, setApplications] = useState<any[]>([]);
+  // データ入れ物
+  const [groupedMyJobs, setGroupedMyJobs] = useState<any[]>([]); // まとめた求人リスト
+  const [applications, setApplications] = useState<any[]>([]); // 応募リスト
 
-  // ★追加: ステータス日本語化辞書
+  // ステータス日本語化
   const statusMap: { [key: string]: string } = {
     applied: '承認待ち',
     negotiating: '商談中',
@@ -31,16 +32,34 @@ export default function HospitalDashboard() {
     }
     setHospitalUser(user);
 
-    // 1. 自分の求人リスト
+    // 1. 自分の求人リストを取得
     const { data: jobsData, error: jobsError } = await supabase
       .from('jobs')
       .select('*')
       .eq('hospital_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (jobsData) setMyJobs(jobsData);
+    if (jobsError) console.error(jobsError);
 
-    // 2. 応募リスト
+    // ★ここでグルーピング処理を行います
+    if (jobsData) {
+      const groups: { [key: string]: any } = {};
+      jobsData.forEach((job) => {
+        const key = job.group_id || job.id; // グループIDがない場合は自分自身をキーに
+        if (!groups[key]) {
+          groups[key] = {
+            ...job,
+            dates: [],
+            count: 0
+          };
+        }
+        groups[key].dates.push(job.start_time);
+        groups[key].count++;
+      });
+      setGroupedMyJobs(Object.values(groups));
+    }
+
+    // 2. 応募リストを取得
     const { data: appData, error: appError } = await supabase
       .from('applications')
       .select(`
@@ -52,6 +71,8 @@ export default function HospitalDashboard() {
       .order('created_at', { ascending: false });
 
     if (appData) setApplications(appData);
+    if (appError) console.error(appError);
+    
     setLoading(false);
   };
 
@@ -65,20 +86,30 @@ export default function HospitalDashboard() {
     router.refresh();
   };
 
-  const handleDeleteJob = async (jobId: string) => {
-    if (!confirm('本当にこの求人を削除しますか？\n（※既に応募がある場合、応募データも消えます）')) return;
+  // 求人削除機能（グループごと削除）
+  const handleDeleteJobGroup = async (job: any) => {
+    if (!confirm(`「${job.title}」の募集日程（全${job.count}件）をすべて削除しますか？\n※既に応募がある場合、それらも消えます。`)) return;
 
-    const { error } = await supabase.from('jobs').delete().eq('id', jobId);
+    // group_idがあればそれで、なければidで削除
+    let query = supabase.from('jobs').delete();
+    
+    if (job.group_id) {
+      query = query.eq('group_id', job.group_id);
+    } else {
+      query = query.eq('id', job.id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       alert('削除に失敗しました: ' + error.message);
     } else {
       alert('求人を削除しました。');
-      fetchData();
+      fetchData(); // 画面更新
     }
   };
 
-  // --- 応募処理 ---
+  // --- 応募処理ロジック ---
   const handleApprove = async (appId: string) => {
     if (!confirm('承認してチャットを開始しますか？')) return;
     const { error } = await supabase.from('applications').update({ status: 'negotiating' }).eq('id', appId);
@@ -113,6 +144,7 @@ export default function HospitalDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-6xl mx-auto space-y-12">
+        {/* ヘッダーエリア */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">🏥 病院管理ダッシュボード</h1>
@@ -129,7 +161,7 @@ export default function HospitalDashboard() {
           <h2 className="text-xl font-bold text-gray-700 mb-4 border-l-4 border-blue-600 pl-3">
             📂 作成した求人リスト
           </h2>
-          {myJobs.length === 0 ? (
+          {groupedMyJobs.length === 0 ? (
             <p className="text-gray-500 bg-white p-6 rounded">まだ求人を作成していません。</p>
           ) : (
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -143,28 +175,37 @@ export default function HospitalDashboard() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {myJobs.map((job) => (
-                    <tr key={job.id}>
+                  {groupedMyJobs.map((group) => (
+                    <tr key={group.id}>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(job.start_time).toLocaleDateString()} <br/>
-                        {new Date(job.start_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}~
+                        {/* 日付をまとめて表示 */}
+                        <div className="font-bold text-gray-700 mb-1">
+                          全{group.count}日程
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {group.dates.slice(0, 5).map((d: string, i: number) => (
+                            <span key={i} className="bg-gray-100 px-2 py-1 rounded text-xs">
+                              {new Date(d).toLocaleDateString()}
+                            </span>
+                          ))}
+                          {group.count > 5 && <span className="text-xs">...他</span>}
+                        </div>
                       </td>
                       <td className="px-6 py-4 font-bold text-gray-800">
-                        <Link href={`/jobs/${job.id}`} className="hover:underline hover:text-blue-600">
-                          {job.title}
+                        <Link href={`/jobs/${group.id}`} className="hover:underline hover:text-blue-600">
+                          {group.title}
                         </Link>
                       </td>
-                      <td className="px-6 py-4 text-sm">¥{job.hourly_wage.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-sm">¥{group.hourly_wage.toLocaleString()}</td>
                       <td className="px-6 py-4 flex gap-2">
-                        {/* ★追加: 編集ボタン */}
                         <Link 
-                          href={`/hospital/edit/${job.id}`}
+                          href={`/hospital/edit/${group.id}`}
                           className="text-blue-600 hover:text-blue-800 text-sm border border-blue-200 px-3 py-1 rounded hover:bg-blue-50"
                         >
                           編集
                         </Link>
                         <button 
-                          onClick={() => handleDeleteJob(job.id)}
+                          onClick={() => handleDeleteJobGroup(group)}
                           className="text-red-500 hover:text-red-700 text-sm border border-red-200 px-3 py-1 rounded hover:bg-red-50"
                         >
                           削除
@@ -208,7 +249,6 @@ export default function HospitalDashboard() {
                         <div className="text-xs text-gray-500">¥{(app.nurses?.wallet_balance || 0).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4">
-                        {/* ★変更: ステータスを日本語化 */}
                         <span className={`px-2 py-1 text-xs font-bold rounded-full ${
                           app.status === 'completed' ? 'bg-gray-800 text-white' :
                           app.status === 'confirmed' ? 'bg-green-100 text-green-800' :
