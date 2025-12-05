@@ -1,53 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react'; // useEffectを追加
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
-// LIFF SDKの型定義をインポート（ビルドエラー防止のため動的インポートで対応）
-import type { Liff } from '@line/liff';
-
 export default function NurseLoginPage() {
   const router = useRouter();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false); // タブ切り替え用
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // ★追加: LIFF初期化と自動ログイン処理
-  useEffect(() => {
-    const initLiff = async () => {
-      try {
-        // LIFF SDKを動的にインポート（サーバーサイドでのエラー回避）
-        const liffModule = await import('@line/liff');
-        const liff = liffModule.default;
+  // ★重要: あなたのAuth0ドメイン (https:// をつけ、末尾のスラッシュは無し)
+  const AUTH0_DOMAIN = "https://kango.jp.auth0.com"; 
 
-        await liff.init({ liffId: '2008629342-aov933qg' }); // あなたのLIFF ID
-
-        // LINEアプリ内で開かれている場合、かつ未ログインなら自動ログイン開始
-        if (liff.isInClient()) {
-          // すでにSupabaseのセッションがあるか確認
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            setLoading(true);
-            setMessage('LINEで自動ログイン中...');
-            // APIへリダイレクト
-            window.location.href = '/api/auth/line';
-          }
-        }
-      } catch (error) {
-        console.error('LIFF init error', error);
-      }
-    };
-
-    initLiff();
-  }, []);
-
-  // --- LINEログイン処理 (ボタン用) ---
+  // --- LINEログイン処理 (Keycloak設定を利用) ---
+  // ★修正: シンプルにAPIへ飛ばすだけ
   const handleLineLogin = () => {
     setLoading(true);
+    // 自分のAPIルートへ移動
     window.location.href = '/api/auth/line';
   };
 
@@ -88,19 +61,21 @@ export default function NurseLoginPage() {
       return;
     }
 
+    // profilesテーブル作成
     const { error: profileError } = await supabase
       .from('profiles')
       .insert([{ id: authData.user.id, email: email, role: 'nurse' }]);
 
+    // 看護師テーブル作成
     const { error: nurseError } = await supabase
       .from('nurses')
       .insert([{ id: authData.user.id, name: name || '未設定のナース' }]);
 
     if (profileError || nurseError) {
        console.error(profileError, nurseError);
-       setMessage('アカウント作成エラー');
+       setMessage('アカウントは作成されましたが、プロフィールの保存に失敗しました。');
     } else {
-       setMessage('登録成功！');
+       setMessage('登録成功！自動的にログインします...');
        setTimeout(() => {
          router.push('/mypage'); 
          router.refresh();
@@ -130,7 +105,7 @@ export default function NurseLoginPage() {
         </div>
 
         {message && (
-          <div className={`p-4 rounded mb-4 text-sm ${message.includes('成功') || message.includes('自動') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <div className={`p-4 rounded mb-4 text-sm ${message.includes('成功') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
             {message}
           </div>
         )}
@@ -155,21 +130,49 @@ export default function NurseLoginPage() {
 
         {/* 入力フォーム */}
         <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-4">
+          
+          {/* 新規登録時のみ表示する「お名前」 */}
           {isSignUp && (
             <div>
               <label className="block text-sm font-bold text-gray-700">お名前</label>
-              <input type="text" required className="mt-1 block w-full border border-gray-300 rounded p-2" placeholder="例: 看護 花子" value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                type="text"
+                required
+                className="mt-1 block w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="例: 看護 花子"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
           )}
+
           <div>
             <label className="block text-sm font-bold text-gray-700">メールアドレス</label>
-            <input type="email" required className="mt-1 block w-full rounded border border-gray-300 p-2" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              type="email"
+              required
+              className="mt-1 block w-full rounded border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700">パスワード</label>
-            <input type="password" required minLength={6} className="mt-1 block w-full rounded border border-gray-300 p-2" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input
+              type="password"
+              required
+              minLength={6}
+              className="mt-1 block w-full rounded border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 disabled:opacity-50 transition shadow">
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded font-bold hover:bg-blue-700 disabled:opacity-50 transition shadow"
+          >
             {loading ? '処理中...' : (isSignUp ? 'この内容で登録する' : 'ログイン')}
           </button>
         </form>
