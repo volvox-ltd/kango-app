@@ -8,8 +8,8 @@ export async function GET(request: Request) {
   if (!code) return NextResponse.json({ error: 'No code' });
 
   // 1. LINEからアクセストークンを取得
-  const LINE_CLIENT_ID = '2008629342'; // ★書き換えてください
-  const LINE_CLIENT_SECRET = '2a1f8048f08b3515fef40f4845d3f1c3'; // ★書き換えてください
+  const LINE_CLIENT_ID = '2008637795'; // ★書き換えてください
+  const LINE_CLIENT_SECRET = '07f7b25273d8e952aa84576bd08f43b7'; // ★書き換えてください
   const REDIRECT_URI = 'https://kango-app.vercel.app/api/auth/line/callback';
 
   const tokenResponse = await fetch('https://api.line.me/oauth2/v2.1/token', {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   // LINEのログイン画面のURLを作成
-  const LINE_CLIENT_ID = process.env.NEXT_PUBLIC_LINE_CLIENT_ID || '2008629342'; // ※後で設定します
+  const LINE_CLIENT_ID = process.env.NEXT_PUBLIC_LINE_CLIENT_ID || '2008637795'; // ※後で設定します
   const REDIRECT_URI = 'https://kango-app.vercel.app/api/auth/line/callback';
   
   // ランダムな文字列（セキュリティ用）

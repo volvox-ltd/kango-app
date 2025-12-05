@@ -24,7 +24,7 @@ export default function NurseLoginPage() {
         const liffModule = await import('@line/liff');
         const liff = liffModule.default;
 
-        await liff.init({ liffId: '2008629342-aov933qg' }); // あなたのLIFF ID
+        await liff.init({ liffId: '2008637795-qJxRGgdg' }); // あなたのLIFF ID
 
         // LINEアプリ内で開かれている場合、かつ未ログインなら自動ログイン開始
         if (liff.isInClient()) {
