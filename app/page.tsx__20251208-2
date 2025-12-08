@@ -16,25 +16,9 @@ function HomeContent() {
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★復活＆修正: LINEからの自動転送ロジック
-  const searchParams = useSearchParams();
+  // ★修正: ここにあった「LINEからの自動ログイン検知 useEffect」は削除しました！
+  // 純粋なトップページに戻します。
 
-  useEffect(() => {
-    // URLに 'liff.state' がある = LINEログインの途中
-    const liffState = searchParams.get('liff.state');
-
-    if (liffState) {
-      // 荷札の中身（例: /api/auth/line?next=/mypage）を読み解く
-      const destination = decodeURIComponent(liffState);
-      
-      console.log('LINE Login redirecting to:', destination);
-
-      // その場所へ転送！（これでAPIが動き、ログイン処理が走ります）
-      window.location.href = destination;
-    }
-  }, [searchParams]);
-
-  // --- 以下、既存の求人表示ロジック ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
