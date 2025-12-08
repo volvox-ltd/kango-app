@@ -129,30 +129,14 @@ export default function HospitalDashboard() {
     }
   };
 
-  // ★修正: API経由で採用＆LINE通知を行う
   const handleConfirm = async (appId: string, userId: string, jobTitle: string) => {
-    if (!confirm('採用を確定しますか？\n※相手にLINEでお祝いメッセージが送信されます。')) return;
+    if (!confirm('採用確定しますか？')) return;
+    const { error } = await supabase.from('applications').update({ status: 'confirmed' }).eq('id', appId);
     
-    try {
-      // APIを呼び出す
-      const res = await fetch('/api/hospital/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: appId }),
-      });
-
-      if (!res.ok) {
-        throw new Error('API Error');
-      }
-
-      // 成功時の処理
-      await sendNotification(userId, '採用が確定しました', `「${jobTitle}」の採用が確定しました。当日はよろしくお願いいたします。`, `/jobs/${appId}`); 
-      alert('採用を確定しました！相手にLINE通知を送りました。');
-      fetchData(); // 画面を更新
-
-    } catch (error) {
-      console.error(error);
-      alert('エラーが発生しました。もう一度お試しください。');
+    if (!error) { 
+      await sendNotification(userId, '採用が確定しました', `「${jobTitle}」の採用が確定しました。当日はよろしくお願いいたします。`, `/jobs/${appId}`); // リンク先は詳細など
+      alert('採用確定しました！'); 
+      fetchData(); 
     }
   };
 
