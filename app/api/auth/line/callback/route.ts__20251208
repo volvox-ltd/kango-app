@@ -7,15 +7,11 @@ export async function GET(request: Request) {
 
   if (!code) return NextResponse.json({ error: 'No code' });
 
-  // 1. 環境変数の取得 (環境変数が設定されていない場合のフォールバックも考慮)
-  const LINE_CLIENT_ID = process.env.NEXT_PUBLIC_LINE_CLIENT_ID || process.env.LINE_CHANNEL_ID!;
-  const LINE_CLIENT_SECRET = process.env.LINE_CHANNEL_SECRET!;
-  const REDIRECT_URI = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app'}/api/auth/line/callback`;
-  
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  // 1. LINEからアクセストークンを取得
+  const LINE_CLIENT_ID = '2008637795'; // ★書き換えてください
+  const LINE_CLIENT_SECRET = '07f7b25273d8e952aa84576bd08f43b7'; // ★書き換えてください
+  const REDIRECT_URI = 'https://kango-app.vercel.app/api/auth/line/callback';
 
-  // 2. LINEからアクセストークンを取得
   const tokenResponse = await fetch('https://api.line.me/oauth2/v2.1/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -31,7 +27,7 @@ export async function GET(request: Request) {
   const tokenData = await tokenResponse.json();
   if (!tokenData.id_token) return NextResponse.json({ error: 'Token error', details: tokenData });
 
-  // 3. IDトークンからユーザー情報を取得
+  // 2. IDトークンからユーザー情報を取得
   const profileResponse = await fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -42,66 +38,65 @@ export async function GET(request: Request) {
   });
 
   const profile = await profileResponse.json();
-  // LINEの仕様により、userId か sub のどちらかがIDになります
-  const lineUserId = profile.userId || profile.sub;
-  const displayName = profile.name || profile.displayName || 'No Name';
-  const pictureUrl = profile.picture || profile.pictureUrl;
-  const email = profile.email || `${lineUserId}@line.dummy`;
+  const email = profile.email || `${profile.sub}@line.dummy`; // メールがない場合はダミー
 
-  // 4. Supabase Adminでユーザー操作
+  // 3. Supabase Adminでユーザー操作
   const supabaseAdmin = createClient(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // ユーザーを探す
+  // ユーザーを探す、なければ作る
+  // (emailで検索するのが一番確実です)
   const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
   let user = users.find((u) => u.email === email);
 
   if (!user) {
-    // --- 新規登録 ---
+    // 新規作成
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       email_confirm: true,
       user_metadata: {
-        full_name: displayName,
-        avatar_url: pictureUrl,
+        full_name: profile.name,
+        avatar_url: profile.picture,
         provider: 'line'
       }
     });
     if (createError) return NextResponse.json({ error: createError.message });
     user = newUser.user!;
     
-    // プロフィール作成
+    // プロフィールテーブルなども作成
     await supabaseAdmin.from('profiles').insert([{ id: user.id, email, role: 'nurse' }]);
-    
-    // 看護師データ作成（LINE IDも保存）
-    await supabaseAdmin.from('nurses').insert([{ 
-      id: user.id, 
-      name: displayName, 
-      avatar_url: pictureUrl,
-      line_user_id: lineUserId // ★ここでLINE IDを保存
-    }]);
-
-  } else {
-    // --- 既存ユーザーの場合 ---
-    // LINE IDを最新のものに更新して紐付けを確実にする
-    await supabaseAdmin.from('nurses').update({
-      line_user_id: lineUserId
-    }).eq('id', user.id); // ★ここを 'user.id' に修正しました
+    // 関連テーブル作成
+    if (newUser.user) {
+      await supabaseAdmin.from('profiles').insert([{ id: newUser.user.id, email, role: 'nurse' }]);
+      await supabaseAdmin.from('nurses').insert([{ 
+        id: newUser.user.id, 
+        name: profile.displayName, // LINEのプロフィールオブジェクトに合わせて修正
+        avatar_url: profile.pictureUrl,
+        line_user_id: profile.userId // ★ここを追加！
+      }]);
+    } else {
+      // 既にユーザーがいる場合も、LINE IDを更新しておく（紐付けのため）
+      await supabaseAdmin.from('nurses').update({
+        line_user_id: profile.userId
+      }).eq('id', existingUser.id);
+    }
   }
 
-  // 5. ログイン用リンク(Magic Link)を発行してリダイレクト
+  // 4. ログイン用リンク(Magic Link)を発行してリダイレクト
+  // これでクライアント側でセッションが確立されます
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: email,
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app'}/mypage`
+      redirectTo: 'https://kango-app.vercel.app/mypage' // ログイン後の移動先
     }
   });
 
   if (linkData?.properties?.action_link) {
+    // ユーザーをそのリンクに飛ばす（＝ログイン完了）
     return NextResponse.redirect(linkData.properties.action_link);
   }
 
