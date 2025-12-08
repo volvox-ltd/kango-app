@@ -16,7 +16,7 @@ function NurseLoginForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // LIFF初期化（アプリ内ブラウザで開かれた場合の自動ログイン用）
+  // LIFF初期化（念のため）
   useEffect(() => {
     const initLiff = async () => {
       try {
@@ -24,16 +24,12 @@ function NurseLoginForm() {
         const liff = liffModule.default;
         await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! });
 
-        // LINEアプリ内なら自動ログイン
+        // すでにLINEアプリ内で開かれている場合は、自動ログイン
         if (liff.isInClient()) {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
-            setLoading(true);
-            setMessage('LINEで自動ログイン中...');
-            // APIへ転送
-            window.location.href = `/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
-          } else {
-             router.push(nextUrl);
+             // APIへ直行
+             window.location.href = `/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
           }
         }
       } catch (error) {
@@ -41,26 +37,22 @@ function NurseLoginForm() {
       }
     };
     initLiff();
-  }, [nextUrl, router]);
+  }, [nextUrl]);
 
-  // ★修正: ボタンを押したら「LIFF URL」へ飛ばす
+  // ★修正: 「APIルート」を指すLIFF URLを作成
+  // これが「一本の太い道」です！
   const handleLineLogin = () => {
     setLoading(true);
     
-    // LIFF IDを取得
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-    if (!liffId) {
-      alert('LIFF IDが設定されていません');
-      setLoading(false);
-      return;
-    }
-
-    // 「ログインしてね」という合図(auto_login=true)をつけて、LINEアプリを呼び出す
-    // これなら universal_link_error は起きません
-    const liffUrl = `https://liff.line.me/${liffId}?auto_login=true&next=${encodeURIComponent(nextUrl)}`;
     
-    // 移動！
-    window.location.href = liffUrl;
+    // LIFF URLの仕組み: https://liff.line.me/{ID}/{PATH}
+    // {PATH} の部分に /api/auth/line を指定します。
+    // こうすると、LINEアプリが開いた瞬間にAPIが叩かれ、自動ログインが走ります。
+    const directApiUrl = `https://liff.line.me/${liffId}/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
+    
+    // そこへ移動！
+    window.location.href = directApiUrl;
   };
 
   // --- 以下、通常ログイン・登録処理はそのまま ---

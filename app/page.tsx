@@ -16,37 +16,9 @@ function HomeContent() {
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★修正: LINEからの自動ログインを検知
-  const searchParams = useSearchParams();
-  const router = useRouter();
+  // ★修正: ここにあった「LINEからの自動ログイン検知 useEffect」は削除しました！
+  // 純粋なトップページに戻します。
 
-  useEffect(() => {
-    // 1. LIFF URLから飛んできた場合 (auto_login=true)
-    const isAutoLogin = searchParams.get('auto_login');
-    const liffState = searchParams.get('liff.state'); // 古いキャッシュ対策
-
-    if (isAutoLogin || liffState) {
-      console.log('LINE Login detected');
-      
-      // 次の目的地を取得
-      let nextPath = searchParams.get('next') || '/mypage';
-      
-      // liff.stateがある場合はそっちを優先(デコード)
-      if (liffState) {
-         const decoded = decodeURIComponent(liffState);
-         if (decoded.includes('next=')) {
-            nextPath = decoded.split('next=')[1];
-         } else if (decoded !== '/login/nurse') {
-            nextPath = decoded;
-         }
-      }
-
-      // APIへ転送 (LINEアプリ内から呼ばれるのでSSOが効く)
-      window.location.href = `/api/auth/line?next=${encodeURIComponent(nextPath)}`;
-    }
-  }, [searchParams]);
-
-  // --- 以下、求人取得ロジックなどはそのまま ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -112,7 +84,6 @@ function HomeContent() {
 
   useEffect(() => {
     fetchJobs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDate, filterPrefecture]);
 
   const clearFilters = () => {
