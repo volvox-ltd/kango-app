@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 function HomeContent() {
   const [loading, setLoading] = useState(true);
@@ -16,9 +16,52 @@ function HomeContent() {
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★修正: ここにあった「自動転送ロジック」はすべて削除しました！
-  // 以前のきれいな状態に戻します。
+  // ★追加: LINEからの戻りを検知する「門番」ロジック
+  const searchParams = useSearchParams();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
+  useEffect(() => {
+    // URLに 'liff.state' がある、または 'next' パラメータがある場合
+    // これはLINEからトップページに戻ってきたことを意味します
+    const liffState = searchParams.get('liff.state');
+    const nextParam = searchParams.get('next');
+
+    if (liffState || nextParam) {
+      console.log('LINE Login detected. Redirecting...');
+      setIsRedirecting(true); // ★重要: 画面を切り替えて求人を隠す
+
+      // 戻り先を特定
+      let destination = '/mypage';
+      
+      // liff.stateがある場合（例: /login/nurse?next=/jobs/123）
+      if (liffState) {
+         const decoded = decodeURIComponent(liffState);
+         // ?next=が含まれていれば抽出
+         if (decoded.includes('next=')) {
+            destination = decoded.split('next=')[1];
+         }
+      } 
+      // シンプルにnextパラメータがある場合
+      else if (nextParam) {
+         destination = nextParam;
+      }
+
+      // APIへ転送！
+      window.location.href = `/api/auth/line?next=${encodeURIComponent(destination)}`;
+    }
+  }, [searchParams]);
+
+  // ★重要: リダイレクト中は「読み込み中...」だけを表示し、下の求人画面は一切レンダリングしない
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-blue-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-blue-600 font-bold">LINEでログイン中...</p>
+      </div>
+    );
+  }
+
+  // --- 以下、通常のトップページ表示ロジック ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
