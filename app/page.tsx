@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react'; // Suspenseを追加
+import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-react';
-import { useSearchParams, useRouter } from 'next/navigation'; // 追加
+import { useSearchParams, useRouter } from 'next/navigation';
 
-// ★メインのロジックをコンポーネントに切り出し
 function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [groupedJobs, setGroupedJobs] = useState<any[]>([]);
@@ -17,37 +16,37 @@ function HomeContent() {
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★追加: LIFFからの戻り検知用
+  // ★修正: LINEからの自動ログインを検知
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // ★追加: LINEから戻ってきたときの自動転送処理
   useEffect(() => {
-    // URLに 'liff.state' がある = LINEから飛んできた証拠
-    const liffState = searchParams.get('liff.state');
+    // 1. LIFF URLから飛んできた場合 (auto_login=true)
+    const isAutoLogin = searchParams.get('auto_login');
+    const liffState = searchParams.get('liff.state'); // 古いキャッシュ対策
 
-    if (liffState) {
-      console.log('LIFF State detected:', liffState);
-      // liff.state には「本来行きたかったページのパス」が入っています
-      // デコードして、ログインAPIへ渡します
-      const nextPath = decodeURIComponent(liffState);
+    if (isAutoLogin || liffState) {
+      console.log('LINE Login detected');
       
-      // nextPath自体に ?next=... が含まれている場合を考慮して抽出
-      // 例: /login/nurse?next=/jobs/123 -> /jobs/123 を取り出す
-      let actualNext = '/mypage';
-      if (nextPath.includes('next=')) {
-        actualNext = nextPath.split('next=')[1];
-      } else if (nextPath !== '/login/nurse') {
-         // /login/nurse 以外なら、そのパス自体を目的地とする
-         actualNext = nextPath;
+      // 次の目的地を取得
+      let nextPath = searchParams.get('next') || '/mypage';
+      
+      // liff.stateがある場合はそっちを優先(デコード)
+      if (liffState) {
+         const decoded = decodeURIComponent(liffState);
+         if (decoded.includes('next=')) {
+            nextPath = decoded.split('next=')[1];
+         } else if (decoded !== '/login/nurse') {
+            nextPath = decoded;
+         }
       }
 
-      console.log('Redirecting to auth API with next:', actualNext);
-      // ログインAPIへ転送（ここでSupabaseのセッションが作られます）
-      window.location.href = `/api/auth/line?next=${encodeURIComponent(actualNext)}`;
+      // APIへ転送 (LINEアプリ内から呼ばれるのでSSOが効く)
+      window.location.href = `/api/auth/line?next=${encodeURIComponent(nextPath)}`;
     }
   }, [searchParams]);
 
+  // --- 以下、求人取得ロジックなどはそのまま ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -84,12 +83,9 @@ function HomeContent() {
 
       jobs.forEach((job) => {
         const key = job.group_id || job.id;
-
-        // 採用済み数をカウント
         const confirmedCount = job.applications?.filter((a: any) => 
           ['confirmed', 'completed'].includes(a.status)
         ).length || 0;
-
         const isFull = confirmedCount >= (job.capacity || 1);
 
         if (!groups[key]) {
@@ -99,7 +95,6 @@ function HomeContent() {
             total_shifts: 0
           };
         }
-        
         groups[key].dates.push({
           id: job.id,
           start: job.start_time,
@@ -108,12 +103,10 @@ function HomeContent() {
         });
         groups[key].total_shifts++;
       });
-
       setGroupedJobs(Object.values(groups));
     } else {
       setGroupedJobs([]);
     }
-    
     setLoading(false);
   };
 
@@ -131,8 +124,6 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      
-      {/* ヘッダーエリア */}
       <header className="bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex justify-between items-center mb-2">
@@ -206,7 +197,6 @@ function HomeContent() {
         </div>
       </header>
 
-      {/* 求人リスト */}
       <main className="max-w-md mx-auto p-4 space-y-4">
         {loading ? (
           <p className="text-center text-gray-400 py-10">読み込み中...</p>
@@ -222,22 +212,15 @@ function HomeContent() {
           groupedJobs.map((group) => {
             const startDate = new Date(group.start_time);
             const endDate = new Date(group.end_time);
-            
             const coverImage = (group.images && group.images.length > 0) 
               ? group.images[0] 
               : 'https://placehold.jp/300x200.png?text=No%20Image';
-
-            // ★ 全日程が満員かチェック
             const isAllFull = group.dates.every((d: any) => d.isFull);
 
             return (
               <Link href={`/jobs/${group.id}`} key={group.id} className="block group">
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 group-active:scale-[0.98] transition-transform duration-100 relative">
-                  
-                  {/* 画像エリア */}
                   <div className="relative h-32 w-full bg-gray-200 overflow-hidden">
-                    
-                    {/* ★追加: 募集終了ラベル (左上リボン) */}
                     {isAllFull && (
                       <div className="absolute top-0 left-0 w-24 h-24 overflow-hidden z-20 pointer-events-none">
                         <div className="bg-gray-500 text-white text-xs font-bold absolute top-[12px] left-[-28px] w-[100px] text-center -rotate-45 py-1 shadow-md">
@@ -245,31 +228,26 @@ function HomeContent() {
                         </div>
                       </div>
                     )}
-
                     <img 
                       src={coverImage} 
                       alt={group.title} 
-                      className={`w-full h-full object-cover transition duration-300 ${isAllFull ? 'grayscale opacity-70' : ''}`} // ★満員ならグレーアウト
+                      className={`w-full h-full object-cover transition duration-300 ${isAllFull ? 'grayscale opacity-70' : ''}`}
                     />
-                    
                     {!isAllFull && (
                       <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
                         ¥{group.hourly_wage.toLocaleString()}
                       </div>
                     )}
                   </div>
-
                   <div className="p-4">
                     <h2 className={`font-bold text-lg leading-tight mb-2 line-clamp-2 ${isAllFull ? 'text-gray-500' : 'text-gray-800'}`}>
                       {group.title}
                     </h2>
-                    
                     <div className="flex items-center gap-1 text-gray-500 text-xs mb-3">
                       <MapPin size={12} />
                       {/* @ts-ignore */}
                       <span className="line-clamp-1">{group.hospitals?.name} ({group.hospitals?.address})</span>
                     </div>
-
                     <div className="mb-3">
                       <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
                         <Calendar size={12} />
@@ -293,7 +271,6 @@ function HomeContent() {
                         )}
                       </div>
                     </div>
-
                     <div className="flex items-center gap-3 text-sm text-gray-600 mb-3 bg-gray-50 p-2 rounded">
                       <Clock size={16} className="text-orange-500" />
                       <span>
@@ -302,7 +279,6 @@ function HomeContent() {
                         {endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                     </div>
-
                     <div className="flex flex-wrap gap-1">
                       {group.benefits?.slice(0, 3).map((tag: string) => (
                         <span key={tag} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded">
@@ -310,7 +286,6 @@ function HomeContent() {
                         </span>
                       ))}
                     </div>
-
                   </div>
                 </div>
               </Link>
@@ -322,7 +297,6 @@ function HomeContent() {
   );
 }
 
-// ★修正: Suspenseでラップしてエクスポート
 export default function Home() {
   return (
     <Suspense fallback={<div className="text-center py-20 text-gray-500">読み込み中...</div>}>

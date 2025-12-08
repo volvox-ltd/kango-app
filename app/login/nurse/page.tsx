@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-// ログインフォーム部分
 function NurseLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -17,68 +16,54 @@ function NurseLoginForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // LIFF初期化（自動ログイン用）
+  // LIFF初期化（アプリ内ブラウザで開かれた場合の自動ログイン用）
   useEffect(() => {
     const initLiff = async () => {
       try {
         const liffModule = await import('@line/liff');
         const liff = liffModule.default;
-        
-        // LIFF IDは環境変数または直書き
-        await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg' });
+        await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! });
 
-        // LINEアプリ内から開かれた場合のみ、自動ログインを試みる
+        // LINEアプリ内なら自動ログイン
         if (liff.isInClient()) {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
             setLoading(true);
             setMessage('LINEで自動ログイン中...');
-            
-            // APIへ飛ばす（API側でCookieを読んで処理してくれる）
-            // ※ここではクッキーセット済み前提ではないので、URLパラメータで渡す
+            // APIへ転送
             window.location.href = `/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
           } else {
-            router.push(nextUrl);
+             router.push(nextUrl);
           }
         }
       } catch (error) {
         console.error('LIFF init error', error);
       }
     };
-
     initLiff();
   }, [nextUrl, router]);
 
-  // ★修正: LINEログインボタン処理（ここが重要！）
-  const handleLineLogin = async () => {
+  // ★修正: ボタンを押したら「LIFF URL」へ飛ばす
+  const handleLineLogin = () => {
     setLoading(true);
     
-    try {
-      // 1. 戻りたい場所をCookieに保存（有効期限5分）
-      // これをしておくと、LINEから戻ってきた時にAPIがこれを読んでくれます
-      document.cookie = `auth-redirect=${nextUrl}; path=/; max-age=300; SameSite=Lax`;
-
-      // 2. LIFF SDKを使ってログイン開始
-      const liff = (await import('@line/liff')).default;
-      
-      if (!liff.id) {
-        await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg' });
-      }
-
-      // 3. LINEアプリの起動を試みる
-      // redirectUri には、あなたのAPIのコールバックURLを指定します
-      liff.login({ 
-        redirectUri: `${window.location.origin}/api/auth/line/callback` 
-      });
-
-    } catch (error) {
-      console.error('Login failed', error);
+    // LIFF IDを取得
+    const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+    if (!liffId) {
+      alert('LIFF IDが設定されていません');
       setLoading(false);
-      alert('LINEログインの起動に失敗しました。');
+      return;
     }
+
+    // 「ログインしてね」という合図(auto_login=true)をつけて、LINEアプリを呼び出す
+    // これなら universal_link_error は起きません
+    const liffUrl = `https://liff.line.me/${liffId}?auto_login=true&next=${encodeURIComponent(nextUrl)}`;
+    
+    // 移動！
+    window.location.href = liffUrl;
   };
 
-  // 通常ログイン処理
+  // --- 以下、通常ログイン・登録処理はそのまま ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -98,7 +83,6 @@ function NurseLoginForm() {
     }
   };
 
-  // 新規登録処理
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -188,7 +172,6 @@ function NurseLoginForm() {
   );
 }
 
-// Suspenseでラップ
 export default function NurseLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-blue-50 px-4">
