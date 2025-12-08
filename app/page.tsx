@@ -7,61 +7,63 @@ import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-re
 import { useSearchParams, useRouter } from 'next/navigation';
 
 function HomeContent() {
+  const searchParams = useSearchParams();
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [groupedJobs, setGroupedJobs] = useState<any[]>([]);
 
-  // フィルター用
+  // フィルター用ステート
   const [filterDate, setFilterDate] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★追加: LINEからの戻りを検知する「門番」ロジック
-  const searchParams = useSearchParams();
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
+  // ★修正: LINEからの戻りを検知したら、即座に「転送モード」にする
   useEffect(() => {
-    // URLに 'liff.state' がある、または 'next' パラメータがある場合
-    // これはLINEからトップページに戻ってきたことを意味します
     const liffState = searchParams.get('liff.state');
     const nextParam = searchParams.get('next');
 
+    // LINEから戻ってきた場合（パラメータがある場合）
     if (liffState || nextParam) {
-      console.log('LINE Login detected. Redirecting...');
-      setIsRedirecting(true); // ★重要: 画面を切り替えて求人を隠す
+      setIsRedirecting(true); // ★ここで画面描画を止めるフラグを立てる
 
       // 戻り先を特定
       let destination = '/mypage';
       
-      // liff.stateがある場合（例: /login/nurse?next=/jobs/123）
-      if (liffState) {
-         const decoded = decodeURIComponent(liffState);
-         // ?next=が含まれていれば抽出
-         if (decoded.includes('next=')) {
-            destination = decoded.split('next=')[1];
-         }
-      } 
-      // シンプルにnextパラメータがある場合
-      else if (nextParam) {
-         destination = nextParam;
+      try {
+        if (liffState) {
+           const decoded = decodeURIComponent(liffState);
+           if (decoded.includes('next=')) {
+              destination = decoded.split('next=')[1];
+           }
+        } else if (nextParam) {
+           destination = nextParam;
+        }
+      } catch (e) {
+        console.error('URL Decode error', e);
       }
 
-      // APIへ転送！
+      console.log('Redirecting to:', destination);
+      // APIへ転送
       window.location.href = `/api/auth/line?next=${encodeURIComponent(destination)}`;
+      return; 
     }
-  }, [searchParams]);
 
-  // ★重要: リダイレクト中は「読み込み中...」だけを表示し、下の求人画面は一切レンダリングしない
+    // パラメータがない場合のみ、求人を読み込む
+    fetchJobs();
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ★重要: 転送モードのときは、求人画面を一切レンダリングしない（これでクラッシュを防ぐ）
   if (isRedirecting) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-blue-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-blue-600 font-bold">LINEでログイン中...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-gray-500 font-bold text-sm">ログイン処理中...</p>
       </div>
     );
   }
 
-  // --- 以下、通常のトップページ表示ロジック ---
+  // --- 以下、通常の求人読み込みロジック ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -73,8 +75,9 @@ function HomeContent() {
   ];
 
   const fetchJobs = async () => {
-    setLoading(true);
-    
+    // ローディング中なら再実行しない
+    if (!loading && groupedJobs.length > 0) return; 
+
     let query = supabase
       .from('jobs')
       .select(`
@@ -125,19 +128,17 @@ function HomeContent() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchJobs();
-  }, [filterDate, filterPrefecture]);
-
   const clearFilters = () => {
     setFilterDate('');
     setFilterKeyword('');
     setFilterPrefecture('');
+    setLoading(true);
     fetchJobs();
   };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+      {/* ヘッダーエリア */}
       <header className="bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex justify-between items-center mb-2">
@@ -153,7 +154,7 @@ function HomeContent() {
                 className="w-full bg-gray-100 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 value={filterKeyword}
                 onChange={(e) => setFilterKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && fetchJobs()}
+                onKeyDown={(e) => e.key === 'Enter' && { setLoading:true, fetchJobs:fetchJobs() }}
               />
             </div>
             <button 
@@ -199,7 +200,7 @@ function HomeContent() {
                     <X size={12} /> 条件をクリア
                   </button>
                   <button 
-                    onClick={() => { fetchJobs(); setShowFilter(false); }}
+                    onClick={() => { setLoading(true); fetchJobs(); setShowFilter(false); }}
                     className="bg-blue-600 text-white text-sm font-bold px-6 py-2 rounded-full shadow-md active:scale-95 transition"
                   >
                     検索する
@@ -211,6 +212,7 @@ function HomeContent() {
         </div>
       </header>
 
+      {/* 求人リスト */}
       <main className="max-w-md mx-auto p-4 space-y-4">
         {loading ? (
           <p className="text-center text-gray-400 py-10">読み込み中...</p>
@@ -226,9 +228,11 @@ function HomeContent() {
           groupedJobs.map((group) => {
             const startDate = new Date(group.start_time);
             const endDate = new Date(group.end_time);
+            
             const coverImage = (group.images && group.images.length > 0) 
               ? group.images[0] 
               : 'https://placehold.jp/300x200.png?text=No%20Image';
+
             const isAllFull = group.dates.every((d: any) => d.isFull);
 
             return (
@@ -242,26 +246,31 @@ function HomeContent() {
                         </div>
                       </div>
                     )}
+
                     <img 
                       src={coverImage} 
                       alt={group.title} 
                       className={`w-full h-full object-cover transition duration-300 ${isAllFull ? 'grayscale opacity-70' : ''}`}
                     />
+                    
                     {!isAllFull && (
                       <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
                         ¥{group.hourly_wage.toLocaleString()}
                       </div>
                     )}
                   </div>
+
                   <div className="p-4">
                     <h2 className={`font-bold text-lg leading-tight mb-2 line-clamp-2 ${isAllFull ? 'text-gray-500' : 'text-gray-800'}`}>
                       {group.title}
                     </h2>
+                    
                     <div className="flex items-center gap-1 text-gray-500 text-xs mb-3">
                       <MapPin size={12} />
                       {/* @ts-ignore */}
                       <span className="line-clamp-1">{group.hospitals?.name} ({group.hospitals?.address})</span>
                     </div>
+
                     <div className="mb-3">
                       <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
                         <Calendar size={12} />
@@ -285,6 +294,7 @@ function HomeContent() {
                         )}
                       </div>
                     </div>
+
                     <div className="flex items-center gap-3 text-sm text-gray-600 mb-3 bg-gray-50 p-2 rounded">
                       <Clock size={16} className="text-orange-500" />
                       <span>
@@ -293,6 +303,7 @@ function HomeContent() {
                         {endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                     </div>
+
                     <div className="flex flex-wrap gap-1">
                       {group.benefits?.slice(0, 3).map((tag: string) => (
                         <span key={tag} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded">
@@ -300,6 +311,7 @@ function HomeContent() {
                         </span>
                       ))}
                     </div>
+
                   </div>
                 </div>
               </Link>

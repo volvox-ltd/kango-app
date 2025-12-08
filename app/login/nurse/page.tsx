@@ -2,23 +2,19 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link'; // Linkコンポーネントを使用
-import { useState } from 'react'; // useStateを追加 (通常ログイン用)
-import { useRouter } from 'next/navigation'; // useRouterを追加 (通常ログイン用)
-import { supabase } from '@/lib/supabase'; // supabaseを追加 (通常ログイン用)
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 function NurseLoginForm() {
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get('next') || '/mypage';
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg';
 
-  // ★修正ポイント:
-  // プログラムで画面遷移させるのではなく、hrefに「LIFF URL」を直接書きます。
-  // これにより、スマホは確実にLINEアプリを起動しようとします。
-  // endpointにパラメータ(?next=...)を渡しておくと、トップページに戻った時にそれを受け取れます。
+  // ★修正: LIFF URLをシンプルに構築
+  // liff.line.me/{ID}?key=value の形式で渡すと、遷移先で searchParams.get('key') で取れます
   const liffUrl = `https://liff.line.me/${liffId}?next=${encodeURIComponent(nextUrl)}`;
 
-  // --- 既存の通常ログイン用ステート ---
   const router = useRouter();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -27,7 +23,6 @@ function NurseLoginForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // --- 通常ログイン処理 (省略せずに記載) ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -65,8 +60,7 @@ function NurseLoginForm() {
         💉 看護師ログイン
       </h2>
       
-      {/* ★修正: <a>タグ (Link) に変更 */}
-      {/* これが「Universal Link」として機能し、LINEアプリを強制起動します */}
+      {/* ★Universal Link: これをクリックするとLINEアプリが起動します */}
       <a
         href={liffUrl}
         className="w-full bg-[#06C755] text-white font-bold py-3 rounded-lg shadow hover:bg-[#05b34c] transition mb-6 flex items-center justify-center gap-2 no-underline"
@@ -79,13 +73,6 @@ function NurseLoginForm() {
         <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">またはメールアドレスで</span></div>
       </div>
 
-      {message && (
-        <div className={`p-4 rounded mb-4 text-sm ${message.includes('成功') || message.includes('自動') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {message}
-        </div>
-      )}
-
-      {/* 以下、フォーム部分はそのまま */}
       <div className="flex mb-6 border-b">
         <button type="button" className={`flex-1 py-2 font-bold ${!isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`} onClick={() => setIsSignUp(false)}>ログイン</button>
         <button type="button" className={`flex-1 py-2 font-bold ${isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`} onClick={() => setIsSignUp(true)}>新規登録</button>
