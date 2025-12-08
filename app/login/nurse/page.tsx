@@ -48,33 +48,15 @@ function NurseLoginForm() {
   }, [nextUrl, router]); // 依存配列に追加
 
   // LINEログインボタン処理
-  const handleLineLogin = async () => {
+  const handleLineLogin = () => {
     setLoading(true);
-
-    try {
-      // 1. 戻り先(nextUrl)をクッキーに保存
-      // (APIルートでやっていたことをここでやります)
-      document.cookie = `auth-redirect=${nextUrl}; path=/; max-age=300; SameSite=Lax`;
-
-      // 2. LIFF SDKをロード
-      const liff = (await import('@line/liff')).default;
-      
-      // 念のため初期化チェック（useEffectで終わっているはずですが安全策）
-      if (!liff.id) {
-        await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg' });
-      }
-
-      // 3. LIFFの機能でログイン開始！
-      // これを使うと、スマホなら自動的にLINEアプリへの切り替えを試みてくれます
-      liff.login({ 
-        redirectUri: `${window.location.origin}/api/auth/line/callback` 
-      });
-
-    } catch (error) {
-      console.error('Login failed', error);
-      setLoading(false);
-      alert('LINEログインの起動に失敗しました。');
-    }
+    
+    // ★修正: LINEアプリを強制的に開くための「魔法のURL」を作ります
+    // LIFF IDの後ろにパス(/login/nurse)をつけると、LINEアプリの中でそのページが開きます
+    const liffUrl = `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg'}/login/nurse?next=${encodeURIComponent(nextUrl)}`;
+    
+    // そのURLへ移動（＝LINEアプリが起動する）
+    window.location.href = liffUrl;
   };
 
   // 通常ログイン処理
