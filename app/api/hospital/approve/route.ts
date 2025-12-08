@@ -1,9 +1,16 @@
-import { createClient } from '@/lib/supabase/server'; // または既存のsupabaseクライアント
+import { createClient } from '@supabase/supabase-js'; // ★ここを修正しました
 import { NextResponse } from 'next/server';
 import { sendLineMessage } from '@/lib/line';
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  // 環境変数から鍵を取得
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  // Admin権限で操作するためのクライアントを作成
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
   
   // 送られてきたデータ（応募ID）を取得
   const { applicationId } = await request.json();
@@ -23,10 +30,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 });
   }
 
-  // 2. ステータスを「採用（hired）」に更新
+  // 2. ステータスを「採用確定（confirmed）」に更新
+  // ※画面のボタンは 'handleConfirm' なので、ステータスは 'confirmed' にするのが正解です
   const { error: updateError } = await supabase
     .from('applications')
-    .update({ status: 'hired' })
+    .update({ status: 'confirmed' })
     .eq('id', applicationId);
 
   if (updateError) {
@@ -40,7 +48,7 @@ export async function POST(request: Request) {
   if (nurseLineId) {
     const message = `🎉 おめでとうございます！\n\n「${jobTitle}」への応募が採用されました！\n\nこれからのやり取りはチャットで行いましょう。\nアプリを開く: https://kango-app.vercel.app/mypage`;
     
-    // さっき作った関数で送信！
+    // LINE送信
     await sendLineMessage(nurseLineId, message);
   }
 
