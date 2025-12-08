@@ -12,7 +12,7 @@ export default function CreateJobPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   // 15分刻みの時間リストを生成 (00:00 ~ 23:45)
-  const timeOptions: string[] = [];
+  const timeOptions = [];
   for (let i = 0; i < 24; i++) {
     for (let j = 0; j < 60; j += 15) {
       const hour = i.toString().padStart(2, '0');

@@ -68,21 +68,7 @@ export async function GET(request: Request) {
     
     // プロフィールテーブルなども作成
     await supabaseAdmin.from('profiles').insert([{ id: user.id, email, role: 'nurse' }]);
-    // 関連テーブル作成
-    if (newUser.user) {
-      await supabaseAdmin.from('profiles').insert([{ id: newUser.user.id, email, role: 'nurse' }]);
-      await supabaseAdmin.from('nurses').insert([{ 
-        id: newUser.user.id, 
-        name: profile.displayName, // LINEのプロフィールオブジェクトに合わせて修正
-        avatar_url: profile.pictureUrl,
-        line_user_id: profile.userId // ★ここを追加！
-      }]);
-    } else {
-      // 既にユーザーがいる場合も、LINE IDを更新しておく（紐付けのため）
-      await supabaseAdmin.from('nurses').update({
-        line_user_id: profile.userId
-      }).eq('id', existingUser.id);
-    }
+    await supabaseAdmin.from('nurses').insert([{ id: user.id, name: profile.name, avatar_url: profile.picture }]);
   }
 
   // 4. ログイン用リンク(Magic Link)を発行してリダイレクト
