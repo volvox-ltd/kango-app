@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers'; // ★追加
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,15 +7,10 @@ export async function GET(request: Request) {
 
   if (!code) return NextResponse.json({ error: 'No code' });
 
-  // ★追加: Cookieから戻り先を取り出す
-  const cookieStore = await cookies();
-  const nextUrl = cookieStore.get('auth-redirect')?.value || '/mypage';
-
-  // 1. 環境変数の取得
+  // 1. 環境変数の取得 (環境変数が設定されていない場合のフォールバックも考慮)
   const LINE_CLIENT_ID = process.env.NEXT_PUBLIC_LINE_CLIENT_ID || process.env.LINE_CHANNEL_ID!;
   const LINE_CLIENT_SECRET = process.env.LINE_CHANNEL_SECRET!;
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app';
-  const REDIRECT_URI = `${BASE_URL}/api/auth/line/callback`;
+  const REDIRECT_URI = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app'}/api/auth/line/callback`;
   
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -48,6 +42,7 @@ export async function GET(request: Request) {
   });
 
   const profile = await profileResponse.json();
+  // LINEの仕様により、userId か sub のどちらかがIDになります
   const lineUserId = profile.userId || profile.sub;
   const displayName = profile.name || profile.displayName || 'No Name';
   const pictureUrl = profile.picture || profile.pictureUrl;
@@ -60,11 +55,12 @@ export async function GET(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
+  // ユーザーを探す
   const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
   let user = users.find((u) => u.email === email);
 
   if (!user) {
-    // 新規登録
+    // --- 新規登録 ---
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       email_confirm: true,
@@ -77,33 +73,33 @@ export async function GET(request: Request) {
     if (createError) return NextResponse.json({ error: createError.message });
     user = newUser.user!;
     
+    // プロフィール作成
     await supabaseAdmin.from('profiles').insert([{ id: user.id, email, role: 'nurse' }]);
+    
+    // 看護師データ作成（LINE IDも保存）
     await supabaseAdmin.from('nurses').insert([{ 
       id: user.id, 
       name: displayName, 
       avatar_url: pictureUrl,
-      line_user_id: lineUserId 
+      line_user_id: lineUserId // ★ここでLINE IDを保存
     }]);
 
   } else {
-    // 既存ユーザー更新
+    // --- 既存ユーザーの場合 ---
+    // LINE IDを最新のものに更新して紐付けを確実にする
     await supabaseAdmin.from('nurses').update({
       line_user_id: lineUserId
-    }).eq('id', user.id);
+    }).eq('id', user.id); // ★ここを 'user.id' に修正しました
   }
 
-  // 5. ログイン用リンク発行
+  // 5. ログイン用リンク(Magic Link)を発行してリダイレクト
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email: email,
     options: {
-      // ★修正: ここで元の場所（nextUrl）に戻るように設定
-      redirectTo: `${BASE_URL}${nextUrl}`
+      redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app'}/mypage`
     }
   });
-
-  // クッキーを削除
-  cookieStore.delete('auth-redirect');
 
   if (linkData?.properties?.action_link) {
     return NextResponse.redirect(linkData.properties.action_link);

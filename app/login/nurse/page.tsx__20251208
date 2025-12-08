@@ -1,18 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // useEffectを追加
 import { supabase } from '@/lib/supabase';
-import { useRouter, useSearchParams } from 'next/navigation'; // useSearchParamsを追加
+import { useRouter } from 'next/navigation';
 
-// LIFF SDKの型定義をインポート
+// LIFF SDKの型定義をインポート（ビルドエラー防止のため動的インポートで対応）
 import type { Liff } from '@line/liff';
 
 export default function NurseLoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // URLパラメータ取得用
-  // ★修正: 戻り先URLを取得（なければマイページへ）
-  const nextUrl = searchParams.get('next') || '/mypage';
-
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,25 +16,25 @@ export default function NurseLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // LIFF初期化と自動ログイン処理
+  // ★追加: LIFF初期化と自動ログイン処理
   useEffect(() => {
     const initLiff = async () => {
       try {
+        // LIFF SDKを動的にインポート（サーバーサイドでのエラー回避）
         const liffModule = await import('@line/liff');
         const liff = liffModule.default;
 
-        await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID || '2008629342-aov933qg' });
+        await liff.init({ liffId: '2008637795-qJxRGgdg' }); // あなたのLIFF ID
 
+        // LINEアプリ内で開かれている場合、かつ未ログインなら自動ログイン開始
         if (liff.isInClient()) {
+          // すでにSupabaseのセッションがあるか確認
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
             setLoading(true);
             setMessage('LINEで自動ログイン中...');
-            // ★修正: nextパラメータを付けてAPIへ
-            window.location.href = `/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
-          } else {
-            // ★追加: 既にログイン済みなら、元の場所へ戻す
-            router.push(nextUrl);
+            // APIへリダイレクト
+            window.location.href = '/api/auth/line';
           }
         }
       } catch (error) {
@@ -49,14 +45,13 @@ export default function NurseLoginPage() {
     initLiff();
   }, []);
 
-  // LINEログインボタン処理
+  // --- LINEログイン処理 (ボタン用) ---
   const handleLineLogin = () => {
     setLoading(true);
-    // ★修正: nextパラメータを付けてAPIへ
-    window.location.href = `/api/auth/line?next=${encodeURIComponent(nextUrl)}`;
+    window.location.href = '/api/auth/line';
   };
 
-  // 通常ログイン処理
+  // --- 通常ログイン処理 ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -71,13 +66,12 @@ export default function NurseLoginPage() {
       setMessage('ログイン失敗: ' + error.message);
       setLoading(false);
     } else {
-      // ★修正: ログイン成功したら元の場所へ
-      router.push(nextUrl); 
+      router.push('/mypage'); 
       router.refresh();
     }
   };
 
-  // 新規登録処理
+  // --- 新規登録処理 ---
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -108,8 +102,7 @@ export default function NurseLoginPage() {
     } else {
        setMessage('登録成功！');
        setTimeout(() => {
-         // ★修正: 登録後も元の場所へ
-         router.push(nextUrl); 
+         router.push('/mypage'); 
          router.refresh();
        }, 1000);
     }
@@ -123,6 +116,7 @@ export default function NurseLoginPage() {
           💉 看護師ログイン
         </h2>
         
+        {/* LINEログインボタン */}
         <button
           onClick={handleLineLogin}
           className="w-full bg-[#06C755] text-white font-bold py-3 rounded-lg shadow hover:bg-[#05b34c] transition mb-6 flex items-center justify-center gap-2"
@@ -141,11 +135,25 @@ export default function NurseLoginPage() {
           </div>
         )}
 
+        {/* タブ切り替えエリア */}
         <div className="flex mb-6 border-b">
-          <button type="button" className={`flex-1 py-2 font-bold ${!isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`} onClick={() => setIsSignUp(false)}>ログイン</button>
-          <button type="button" className={`flex-1 py-2 font-bold ${isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`} onClick={() => setIsSignUp(true)}>新規登録</button>
+          <button
+            type="button"
+            className={`flex-1 py-2 font-bold ${!isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}
+            onClick={() => setIsSignUp(false)}
+          >
+            ログイン
+          </button>
+          <button
+            type="button"
+            className={`flex-1 py-2 font-bold ${isSignUp ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}
+            onClick={() => setIsSignUp(true)}
+          >
+            新規登録
+          </button>
         </div>
 
+        {/* 入力フォーム */}
         <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-4">
           {isSignUp && (
             <div>
