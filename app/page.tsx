@@ -4,66 +4,84 @@ import { useEffect, useState, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Search, MapPin, Calendar, SlidersHorizontal, Clock, X } from 'lucide-react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 function HomeContent() {
-  const searchParams = useSearchParams();
-  const [isRedirecting, setIsRedirecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [groupedJobs, setGroupedJobs] = useState<any[]>([]);
 
-  // フィルター用ステート
+  // フィルター用
   const [filterDate, setFilterDate] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★修正: LINEからの戻りを検知したら、即座に「転送モード」にする
+  // ★修正: LINEからの戻りを検知する「門番」ロジック
+  const searchParams = useSearchParams();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   useEffect(() => {
+    // 1. LIFF URLから飛んできた場合
+    // liff.line.me からの遷移ではパラメータが付与されます
     const liffState = searchParams.get('liff.state');
     const nextParam = searchParams.get('next');
 
-    // LINEから戻ってきた場合（パラメータがある場合）
     if (liffState || nextParam) {
-      setIsRedirecting(true); // ★ここで画面描画を止めるフラグを立てる
-
+      setIsRedirecting(true); // 画面を隠す
+      
       // 戻り先を特定
       let destination = '/mypage';
-      
-      try {
-        if (liffState) {
-           const decoded = decodeURIComponent(liffState);
-           if (decoded.includes('next=')) {
-              destination = decoded.split('next=')[1];
-           }
-        } else if (nextParam) {
-           destination = nextParam;
-        }
-      } catch (e) {
-        console.error('URL Decode error', e);
+      if (nextParam) {
+         destination = nextParam;
+      } else if (liffState) {
+         const decoded = decodeURIComponent(liffState);
+         if (decoded.includes('next=')) {
+            destination = decoded.split('next=')[1];
+         }
       }
 
-      console.log('Redirecting to:', destination);
-      // APIへ転送
-      window.location.href = `/api/auth/line?next=${encodeURIComponent(destination)}`;
-      return; 
-    }
+      console.log('Starting LIFF Login flow. Destination:', destination);
 
-    // パラメータがない場合のみ、求人を読み込む
-    fetchJobs();
+      // ★ここが最大の修正ポイント！
+      // window.location.href ではなく、LIFF SDKを使ってログインします。
+      // これにより、Webログイン画面（メアド入力）に落ちるのを防ぎます。
+      const runLiffLogin = async () => {
+        try {
+          const liff = (await import('@line/liff')).default;
+          await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! });
+
+          // コールバックURLを作成（nextパラメータを付与）
+          // API側でこれを読み取って、元の場所に戻してくれます
+          const callbackUrl = `${window.location.origin}/api/auth/line/callback?next=${encodeURIComponent(destination)}`;
+
+          // ログイン実行（リダイレクト）
+          liff.login({ redirectUri: callbackUrl });
+          
+        } catch (e) {
+          console.error('LIFF Login Error:', e);
+          setIsRedirecting(false); // エラー時は解除
+        }
+      };
+
+      runLiffLogin();
+    } else {
+      // 通常アクセスの時だけ求人を読み込む
+      fetchJobs();
+    }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ★重要: 転送モードのときは、求人画面を一切レンダリングしない（これでクラッシュを防ぐ）
+
+  // ★転送中はローディング表示のみ（クラッシュ防止）
   if (isRedirecting) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-500 font-bold text-sm">ログイン処理中...</p>
+        <p className="text-gray-500 font-bold text-sm">LINEでログイン中...</p>
       </div>
     );
   }
 
-  // --- 以下、通常の求人読み込みロジック ---
+  // --- 以下、通常の求人表示ロジック（変更なし） ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -75,50 +93,33 @@ function HomeContent() {
   ];
 
   const fetchJobs = async () => {
-    // ローディング中なら再実行しない
     if (!loading && groupedJobs.length > 0) return; 
-
+    
     let query = supabase
       .from('jobs')
-      .select(`
-        *,
-        hospitals!inner ( name, address ),
-        applications ( status )
-      `)
+      .select(`*, hospitals!inner(name, address), applications(status)`)
       .eq('status', 'open')
       .order('start_time', { ascending: true });
 
-    if (filterDate) { query = query.gte('start_time', `${filterDate}T00:00:00`); }
-    if (filterKeyword) { query = query.ilike('title', `%${filterKeyword}%`); }
-    if (filterPrefecture) { query = query.like('hospitals.address', `${filterPrefecture}%`); }
+    if (filterDate) query = query.gte('start_time', `${filterDate}T00:00:00`);
+    if (filterKeyword) query = query.ilike('title', `%${filterKeyword}%`);
+    if (filterPrefecture) query = query.like('hospitals.address', `${filterPrefecture}%`);
 
     const { data: jobs, error } = await query;
-
     if (error) console.error(error);
     
     if (jobs) {
       const groups: { [key: string]: any } = {};
-
       jobs.forEach((job) => {
         const key = job.group_id || job.id;
         const confirmedCount = job.applications?.filter((a: any) => 
           ['confirmed', 'completed'].includes(a.status)
         ).length || 0;
         const isFull = confirmedCount >= (job.capacity || 1);
-
         if (!groups[key]) {
-          groups[key] = {
-            ...job,
-            dates: [],
-            total_shifts: 0
-          };
+          groups[key] = { ...job, dates: [], total_shifts: 0 };
         }
-        groups[key].dates.push({
-          id: job.id,
-          start: job.start_time,
-          end: job.end_time,
-          isFull: isFull
-        });
+        groups[key].dates.push({ id: job.id, start: job.start_time, end: job.end_time, isFull: isFull });
         groups[key].total_shifts++;
       });
       setGroupedJobs(Object.values(groups));
@@ -138,7 +139,6 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* ヘッダーエリア */}
       <header className="bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex justify-between items-center mb-2">
@@ -212,7 +212,6 @@ function HomeContent() {
         </div>
       </header>
 
-      {/* 求人リスト */}
       <main className="max-w-md mx-auto p-4 space-y-4">
         {loading ? (
           <p className="text-center text-gray-400 py-10">読み込み中...</p>

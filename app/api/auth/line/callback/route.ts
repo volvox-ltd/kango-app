@@ -1,21 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers'; // ★追加
+import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
+  // ★修正: クッキーだけでなく、URLパラメータの 'next' も確認する
+  // これにより、クッキーが消えても迷子になりません
+  const nextParam = searchParams.get('next');
 
   if (!code) return NextResponse.json({ error: 'No code' });
 
-  // ★追加: Cookieから戻り先を取り出す
+  // 戻り先を決定（URLパラメータ優先 → クッキー → デフォルト）
   const cookieStore = await cookies();
-  const nextUrl = cookieStore.get('auth-redirect')?.value || '/mypage';
+  const nextUrl = nextParam || cookieStore.get('auth-redirect')?.value || '/mypage';
 
   // 1. 環境変数の取得
   const LINE_CLIENT_ID = process.env.NEXT_PUBLIC_LINE_CLIENT_ID || process.env.LINE_CHANNEL_ID!;
   const LINE_CLIENT_SECRET = process.env.LINE_CHANNEL_SECRET!;
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app';
+  // ★重要: コールバックURLにも next を引き継ぐ必要がありますが、
+  // LINEの認証時には登録されたURLと完全に一致する必要があるため、ここではパラメータを付けないのが一般的です。
+  // ただし、今回は「state」を使わずに「next」を運ぶため、liff.login の redirectUri にパラメータを含めます。
+  // LINE Developersの登録URLは「パラメータなし」でも、実際のリクエストには「パラメータあり」で通る場合がありますが、
+  // 最も安全なのは「登録URLと一致させること」です。
+  // 今回は、liff.loginのredirectUriにパラメータを付ける戦略をとります。
+  
+  // NOTE: redirect_uri は LINE Developers に登録したものと一致させる必要があります
   const REDIRECT_URI = `${BASE_URL}/api/auth/line/callback`;
   
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -28,7 +39,7 @@ export async function GET(request: Request) {
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: REDIRECT_URI, // ここは登録URLと一致させる（パラメータなし）
       client_id: LINE_CLIENT_ID,
       client_secret: LINE_CLIENT_SECRET,
     }),
@@ -97,12 +108,12 @@ export async function GET(request: Request) {
     type: 'magiclink',
     email: email,
     options: {
-      // ★修正: ここで元の場所（nextUrl）に戻るように設定
+      // ★ここで、確実に元の場所（nextUrl）に戻るように設定
       redirectTo: `${BASE_URL}${nextUrl}`
     }
   });
 
-  // クッキーを削除
+  // クッキーを削除（念のため）
   cookieStore.delete('auth-redirect');
 
   if (linkData?.properties?.action_link) {
