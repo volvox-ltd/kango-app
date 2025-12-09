@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://kango-app.vercel.app';
 
-    // 1. LINEのサーバーに「このトークン本物？」と聞きに行く
+    // 1. LINEサーバーに問い合わせて、トークンが本物かチェック
     const verifyResponse = await fetch('https://api.line.me/oauth2/v2.1/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -25,17 +25,17 @@ export async function POST(request: Request) {
     const profile = await verifyResponse.json();
 
     if (profile.error) {
-      console.error('LINE Token Verify Error:', profile);
+      console.error('Verify Error:', profile);
       return NextResponse.json({ error: profile.error_description }, { status: 400 });
     }
 
-    // 2. プロフィール情報を取得
-    const lineUserId = profile.sub; // LINEのユーザーID
+    // 2. ユーザー情報を取得
+    const lineUserId = profile.sub;
     const displayName = profile.name;
     const pictureUrl = profile.picture;
     const email = profile.email || `${lineUserId}@line.dummy`;
 
-    // 3. Supabase Adminでユーザー処理
+    // 3. Supabase Adminでユーザー検索・作成
     const supabaseAdmin = createClient(
       SUPABASE_URL,
       SUPABASE_SERVICE_KEY,
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     let user = users.find((u) => u.email === email);
 
     if (!user) {
-      // 新規登録
+      // 新規作成
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: email,
         email_confirm: true,
@@ -55,16 +55,15 @@ export async function POST(request: Request) {
       if (createError) throw createError;
       user = newUser.user!;
       
-      // 関連テーブル作成
       await supabaseAdmin.from('profiles').insert([{ id: user.id, email, role: 'nurse' }]);
       await supabaseAdmin.from('nurses').insert([{ id: user.id, name: displayName, avatar_url: pictureUrl, line_user_id: lineUserId }]);
     } else {
-      // 既存更新
+      // 既存ユーザーならLINE IDなどを最新化
       await supabaseAdmin.from('nurses').update({ line_user_id: lineUserId }).eq('id', user.id);
     }
 
-    // 4. マジックリンクを発行して返す
-    // これをフロントエンドで踏むと、クッキーがセットされてログイン状態になる
+    // 4. マジックリンク(ログイン用URL)を発行
+    // これをクライアントに返して、踏ませることでログイン状態にする
     const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: email,
@@ -74,7 +73,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: linkData.properties?.action_link });
 
   } catch (error: any) {
-    console.error('Auth Error:', error);
+    console.error('API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
