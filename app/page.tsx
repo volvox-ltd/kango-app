@@ -10,78 +10,79 @@ function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [groupedJobs, setGroupedJobs] = useState<any[]>([]);
 
-  // フィルター用
   const [filterDate, setFilterDate] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterPrefecture, setFilterPrefecture] = useState('');
   const [showFilter, setShowFilter] = useState(false);
 
-  // ★修正: LINEからの戻りを検知する「門番」ロジック
   const searchParams = useSearchParams();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // 1. LIFF URLから飛んできた場合
-    // liff.line.me からの遷移ではパラメータが付与されます
+    // 1. LIFFからのアクセスを検知
     const liffState = searchParams.get('liff.state');
     const nextParam = searchParams.get('next');
 
     if (liffState || nextParam) {
-      setIsRedirecting(true); // 画面を隠す
+      setIsRedirecting(true);
       
       // 戻り先を特定
       let destination = '/mypage';
       if (nextParam) {
          destination = nextParam;
       } else if (liffState) {
-         const decoded = decodeURIComponent(liffState);
-         if (decoded.includes('next=')) {
-            destination = decoded.split('next=')[1];
+         try {
+           const decoded = decodeURIComponent(liffState);
+           if (decoded.includes('next=')) {
+              destination = decoded.split('next=')[1];
+           }
+         } catch (e) {
+           console.error(e);
          }
       }
 
-      console.log('Starting LIFF Login flow. Destination:', destination);
+      console.log('Starting LIFF App Login...');
 
-      // ★ここが最大の修正ポイント！
-      // window.location.href ではなく、LIFF SDKを使ってログインします。
-      // これにより、Webログイン画面（メアド入力）に落ちるのを防ぎます。
       const runLiffLogin = async () => {
         try {
+          // LIFF SDKをロード
           const liff = (await import('@line/liff')).default;
           await liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! });
 
-          // コールバックURLを作成（nextパラメータを付与）
-          // API側でこれを読み取って、元の場所に戻してくれます
+          // ★ここが決定的な違いです★
+          // APIルート(/api/auth/line)へリダイレクトするのではなく、
+          // LIFF SDKの login() 関数を使って、アプリ内ブラウザの特権でログインします。
+          // リダイレクト先(redirectUri)には、APIのコールバックURLを指定します。
+          
           const callbackUrl = `${window.location.origin}/api/auth/line/callback?next=${encodeURIComponent(destination)}`;
-
-          // ログイン実行（リダイレクト）
+          
+          // これを実行すると、LINEアプリは「パスワード入力なし」で認証を通し、
+          // 直接 callbackUrl へコードを持って移動します。
           liff.login({ redirectUri: callbackUrl });
           
         } catch (e) {
           console.error('LIFF Login Error:', e);
-          setIsRedirecting(false); // エラー時は解除
+          setIsRedirecting(false);
         }
       };
 
       runLiffLogin();
     } else {
-      // 通常アクセスの時だけ求人を読み込む
       fetchJobs();
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
-
-  // ★転送中はローディング表示のみ（クラッシュ防止）
+  // ログイン処理中は画面を白くする
   if (isRedirecting) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-500 font-bold text-sm">LINEでログイン中...</p>
+        <p className="text-gray-500 font-bold text-sm">LINEで認証中...</p>
       </div>
     );
   }
 
-  // --- 以下、通常の求人表示ロジック（変更なし） ---
+  // --- 以下、変更なし ---
   const prefectures = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
@@ -97,29 +98,45 @@ function HomeContent() {
     
     let query = supabase
       .from('jobs')
-      .select(`*, hospitals!inner(name, address), applications(status)`)
+      .select(`
+        *,
+        hospitals!inner ( name, address ),
+        applications ( status )
+      `)
       .eq('status', 'open')
       .order('start_time', { ascending: true });
 
-    if (filterDate) query = query.gte('start_time', `${filterDate}T00:00:00`);
-    if (filterKeyword) query = query.ilike('title', `%${filterKeyword}%`);
-    if (filterPrefecture) query = query.like('hospitals.address', `${filterPrefecture}%`);
+    if (filterDate) { query = query.gte('start_time', `${filterDate}T00:00:00`); }
+    if (filterKeyword) { query = query.ilike('title', `%${filterKeyword}%`); }
+    if (filterPrefecture) { query = query.like('hospitals.address', `${filterPrefecture}%`); }
 
     const { data: jobs, error } = await query;
+
     if (error) console.error(error);
     
     if (jobs) {
       const groups: { [key: string]: any } = {};
+
       jobs.forEach((job) => {
         const key = job.group_id || job.id;
         const confirmedCount = job.applications?.filter((a: any) => 
           ['confirmed', 'completed'].includes(a.status)
         ).length || 0;
         const isFull = confirmedCount >= (job.capacity || 1);
+
         if (!groups[key]) {
-          groups[key] = { ...job, dates: [], total_shifts: 0 };
+          groups[key] = {
+            ...job,
+            dates: [],
+            total_shifts: 0
+          };
         }
-        groups[key].dates.push({ id: job.id, start: job.start_time, end: job.end_time, isFull: isFull });
+        groups[key].dates.push({
+          id: job.id,
+          start: job.start_time,
+          end: job.end_time,
+          isFull: isFull
+        });
         groups[key].total_shifts++;
       });
       setGroupedJobs(Object.values(groups));
@@ -128,6 +145,10 @@ function HomeContent() {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchJobs();
+  }, [filterDate, filterPrefecture]);
 
   const clearFilters = () => {
     setFilterDate('');
@@ -144,7 +165,6 @@ function HomeContent() {
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-xl font-bold text-gray-800">KanGO!</h1>
           </div>
-          
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
@@ -169,7 +189,6 @@ function HomeContent() {
               )}
             </button>
           </div>
-
           {showFilter && (
             <div className="mt-3 pt-3 border-t animate-in slide-in-from-top-2 duration-200">
               <div className="space-y-4">
@@ -211,7 +230,6 @@ function HomeContent() {
           )}
         </div>
       </header>
-
       <main className="max-w-md mx-auto p-4 space-y-4">
         {loading ? (
           <p className="text-center text-gray-400 py-10">読み込み中...</p>
@@ -227,11 +245,9 @@ function HomeContent() {
           groupedJobs.map((group) => {
             const startDate = new Date(group.start_time);
             const endDate = new Date(group.end_time);
-            
             const coverImage = (group.images && group.images.length > 0) 
               ? group.images[0] 
               : 'https://placehold.jp/300x200.png?text=No%20Image';
-
             const isAllFull = group.dates.every((d: any) => d.isFull);
 
             return (
@@ -245,31 +261,26 @@ function HomeContent() {
                         </div>
                       </div>
                     )}
-
                     <img 
                       src={coverImage} 
                       alt={group.title} 
                       className={`w-full h-full object-cover transition duration-300 ${isAllFull ? 'grayscale opacity-70' : ''}`}
                     />
-                    
                     {!isAllFull && (
                       <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-full shadow-md text-sm">
                         ¥{group.hourly_wage.toLocaleString()}
                       </div>
                     )}
                   </div>
-
                   <div className="p-4">
                     <h2 className={`font-bold text-lg leading-tight mb-2 line-clamp-2 ${isAllFull ? 'text-gray-500' : 'text-gray-800'}`}>
                       {group.title}
                     </h2>
-                    
                     <div className="flex items-center gap-1 text-gray-500 text-xs mb-3">
                       <MapPin size={12} />
                       {/* @ts-ignore */}
                       <span className="line-clamp-1">{group.hospitals?.name} ({group.hospitals?.address})</span>
                     </div>
-
                     <div className="mb-3">
                       <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
                         <Calendar size={12} />
@@ -293,7 +304,6 @@ function HomeContent() {
                         )}
                       </div>
                     </div>
-
                     <div className="flex items-center gap-3 text-sm text-gray-600 mb-3 bg-gray-50 p-2 rounded">
                       <Clock size={16} className="text-orange-500" />
                       <span>
@@ -302,7 +312,6 @@ function HomeContent() {
                         {endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                     </div>
-
                     <div className="flex flex-wrap gap-1">
                       {group.benefits?.slice(0, 3).map((tag: string) => (
                         <span key={tag} className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded">
@@ -310,7 +319,6 @@ function HomeContent() {
                         </span>
                       ))}
                     </div>
-
                   </div>
                 </div>
               </Link>
