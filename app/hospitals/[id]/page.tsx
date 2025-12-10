@@ -1,9 +1,10 @@
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import { MapPin, Building2, Globe, ThumbsUp, ThumbsDown, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function HospitalProfilePage({ params }: { params: { id: string } }) {
   const { id } = await params;
+  const supabase = await createClient();
 
   // 1. 病院データ取得
   const { data: hospital } = await supabase
@@ -54,7 +55,7 @@ export default async function HospitalProfilePage({ params }: { params: { id: st
       </div>
 
       <div className="max-w-md mx-auto space-y-8">
-        
+
         {/* 基本情報 */}
         <section>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{hospital.name}</h1>
@@ -80,9 +81,9 @@ export default async function HospitalProfilePage({ params }: { params: { id: st
           </div>
 
           {hospital.website_url && (
-            <a 
-              href={hospital.website_url} 
-              target="_blank" 
+            <a
+              href={hospital.website_url}
+              target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 mt-4 text-blue-600 border border-blue-200 px-4 py-2 rounded-lg hover:bg-blue-50 text-sm font-bold"
             >

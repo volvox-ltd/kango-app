@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import ApplyButton from '@/components/ApplyButton';
 import { MapPin, Clock, Calendar, AlertTriangle, FileText, CheckCircle, Navigation, Building2, Globe } from 'lucide-react';
@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const supabase = await createClient();
 
   // 1. 求人データ + 応募状況を取得
   const { data: job, error } = await supabase
@@ -18,6 +19,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     `)
     .eq('id', id)
     .single();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  // @ts-ignore
+  const isApplied = user ? job?.applications?.some((a: any) => a.user_id === user.id) : false;
 
   if (error || !job) {
     return <div className="p-8 text-center">お仕事が見つかりませんでした。</div>;
@@ -41,7 +46,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       .eq('group_id', job.group_id)
       .eq('status', 'open')
       .order('start_time', { ascending: true });
-    
+
     if (data) {
       relatedJobs = data.map((d: any) => {
         const count = d.applications?.filter((a: any) => ['confirmed', 'completed'].includes(a.status)).length || 0;
@@ -62,7 +67,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const formatTime = (start: string, end: string) => {
     const s = new Date(start);
     const e = new Date(end);
-    return `${s.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}〜${e.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+    return `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}〜${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   const startDate = new Date(job.start_time);
@@ -74,9 +79,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       {/* 画像エリア */}
       <div className="w-full h-64 bg-gray-200 relative">
         {job.images && job.images.length > 0 ? (
-          <img 
-            src={job.images[0]} 
-            alt="Main" 
+          <img
+            src={job.images[0]}
+            alt="Main"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -106,9 +111,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               </span>
             ))}
           </div>
-          
+
           <h1 className="text-xl font-bold text-gray-900 mb-2">{job.title}</h1>
-          
+
           <div className="flex items-center gap-2 text-gray-600 text-sm mb-4">
             <MapPin size={16} />
             {/* @ts-ignore */}
@@ -136,7 +141,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               <div className="flex flex-wrap gap-2">
                 {relatedJobs.map((relJob) => {
                   const isCurrent = relJob.id === job.id;
-                  
+
                   if (relJob.isFull && !isCurrent) {
                     // 満員の場合はグレーアウト
                     return (
@@ -151,18 +156,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                     <Link
                       key={relJob.id}
                       href={`/jobs/${relJob.id}`}
-                      className={`block text-center px-3 py-2 rounded-lg border text-sm transition-all ${
-                        isCurrent 
-                          ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-md transform scale-105' 
-                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                      }`}
+                      className={`block text-center px-3 py-2 rounded-lg border text-sm transition-all ${isCurrent
+                        ? 'bg-blue-600 text-white border-blue-600 font-bold shadow-md transform scale-105'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
                     >
                       <span className="block text-xs opacity-90">{formatDate(relJob.start_time)}</span>
                       <span className="block font-bold">{
                         new Date(relJob.start_time).getHours()
                       }:{
-                        new Date(relJob.start_time).getMinutes().toString().padStart(2, '0')
-                      }〜</span>
+                          new Date(relJob.start_time).getMinutes().toString().padStart(2, '0')
+                        }〜</span>
                     </Link>
                   );
                 })}
@@ -194,9 +198,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               <p className="text-sm text-gray-500 mb-2">{job.hospitals?.address}</p>
               {/* @ts-ignore */}
               {job.hospitals?.website_url && (
-                <a 
+                <a
                   // @ts-ignore
-                  href={job.hospitals.website_url} target="_blank" rel="noopener noreferrer" 
+                  href={job.hospitals.website_url} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50"
                 >
                   <Globe size={12} /> 公式サイトを見る
@@ -238,7 +242,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             </section>
           )}
           {job.document_url && (
-             <section>
+            <section>
               <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
                 <FileText size={18} className="text-gray-500" /> 関連資料
               </h2>
@@ -263,17 +267,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       <div className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 z-50">
         <div className="max-w-2xl mx-auto flex gap-4 items-center">
           <div className="flex-1">
-             <p className="text-xs text-gray-500">時給</p>
-             <p className="text-xl font-bold text-blue-600">¥{job.hourly_wage.toLocaleString()}</p>
+            <p className="text-xs text-gray-500">時給</p>
+            <p className="text-xl font-bold text-blue-600">¥{job.hourly_wage.toLocaleString()}</p>
           </div>
           <div className="flex-[2]">
-             {isCurrentFull ? (
-               <button disabled className="w-full py-3 bg-gray-400 text-white rounded-lg font-bold cursor-not-allowed">
-                 募集終了しました
-               </button>
-             ) : (
-               <ApplyButton jobId={job.id} />
-             )}
+            {isCurrentFull ? (
+              <button disabled className="w-full py-3 bg-gray-400 text-white rounded-lg font-bold cursor-not-allowed">
+                募集終了しました
+              </button>
+            ) : (
+              <ApplyButton jobId={job.id} isApplied={isApplied} />
+            )}
           </div>
         </div>
       </div>

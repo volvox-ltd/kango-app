@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function NurseLoginForm() {
+  const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get('next') || '/mypage';
-  
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -28,7 +29,7 @@ function NurseLoginForm() {
           // ★重要: パスワード入力画面には飛ばさず、
           // 今持っている「通行手形(IDトークン)」をAPIに渡して、その場でログインしてもらう
           const idToken = liff.getIDToken();
-          
+
           if (idToken) {
             await verifyTokenAndLogin(idToken);
           }
@@ -73,7 +74,7 @@ function NurseLoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const [name, setName] = useState(''); 
+  const [name, setName] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +107,7 @@ function NurseLoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-blue-50 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 border-t-4 border-blue-500">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">💉 看護師ログイン</h2>
-        
+
         {/* ★ここがポイント: ボタンを単純なリンクにする */}
         <a
           href={liffUrl}
