@@ -14,9 +14,9 @@ export default function ApplyButton({ jobId, isApplied = false }: { jobId: strin
     setLoading(true);
 
     // 1. ログインチェック
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!user) {
       if (confirm('応募するにはログインが必要です。\nログイン画面に移動しますか？')) {
         // ★修正: 現在のページのURLを「next」として持たせてログイン画面へ
         const returnUrl = encodeURIComponent(pathname);
@@ -32,7 +32,7 @@ export default function ApplyButton({ jobId, isApplied = false }: { jobId: strin
       .insert([
         {
           job_id: jobId,
-          user_id: session.user.id,
+          user_id: user.id,
           status: 'applied'
         }
       ]);
